@@ -1,0 +1,358 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+}
+
+/* Glassmorphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ========================================
+   Success Modal Animations
+   ======================================== */
+
+/* Confetti falling animation */
+@keyframes confetti {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.animate-confetti {
+  animation: confetti 3s ease-out forwards;
+}
+
+/* Bounce in animation */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s ease-out forwards;
+}
+
+/* Draw checkmark animation */
+@keyframes draw-check {
+  0% {
+    stroke-dashoffset: 100;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw-check {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw-check 0.6s ease-out 0.3s forwards;
+}
+
+/* Pulse animation for loading */
+@keyframes pulse-soft {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ========================================
+   Custom Leaflet Draw Toolbar Styles
+   ======================================== */
+
+/* Main toolbar container */
+.leaflet-draw-toolbar {
+  background: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  padding: 6px !important;
+  border: none !important;
+  margin-top: 8px !important;
+}
+
+/* All toolbar buttons - base style */
+.leaflet-draw-toolbar a {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 10px !important;
+  margin: 4px !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+.leaflet-draw-toolbar a:hover {
+  transform: scale(1.05) !important;
+}
+
+.leaflet-draw-toolbar a:active {
+  transform: scale(0.98) !important;
+}
+
+/* Polygon button - GREEN */
+.leaflet-draw-draw-polygon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+.leaflet-draw-draw-polygon::after {
+  content: "▽" !important;
+  font-size: 20px !important;
+  color: white !important;
+}
+
+/* Rectangle button - PURPLE */
+.leaflet-draw-draw-rectangle {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+  box-shadow: 0 3px 10px rgba(139, 92, 246, 0.4) !important;
+}
+
+.leaflet-draw-draw-rectangle::after {
+  content: "▢" !important;
+  font-size: 22px !important;
+  color: white !important;
+}
+
+/* Marker button - ORANGE */
+.leaflet-draw-draw-marker {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4) !important;
+}
+
+.leaflet-draw-draw-marker::after {
+  content: "📍" !important;
+  font-size: 18px !important;
+}
+
+/* Hide original background images */
+.leaflet-draw-toolbar a {
+  background-image: none !important;
+}
+
+/* Tooltip styling */
+.leaflet-draw-tooltip {
+  background: #1e293b !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+.leaflet-draw-tooltip-single {
+  margin-top: 10px !important;
+}
+
+/* Hide draw section header */
+.leaflet-draw-section {
+  border: none !important;
+}
+
+/* Actions bar (Finish/Delete/Cancel) - RIGHT BOTTOM */
+.leaflet-draw-actions,
+.leaflet-draw-actions-top,
+.leaflet-draw-actions-bottom,
+ul.leaflet-draw-actions {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  background: rgba(30, 41, 59, 0.98) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  border: 2px solid #475569 !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 8px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  z-index: 999999 !important;
+  min-width: auto !important;
+  list-style: none !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.leaflet-draw-actions li,
+ul.leaflet-draw-actions li {
+  border: none !important;
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+  background: none !important;
+}
+
+.leaflet-draw-actions li a,
+.leaflet-draw-actions a,
+ul.leaflet-draw-actions li a {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+  padding: 10px 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: all 0.15s ease !important;
+  text-decoration: none !important;
+  min-height: 36px !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+  border: none !important;
+  cursor: pointer !important;
+  text-transform: capitalize !important;
+  white-space: nowrap !important;
+}
+
+.leaflet-draw-actions li a:hover,
+ul.leaflet-draw-actions li a:hover {
+  transform: scale(1.05) !important;
+}
+
+/* First button = Finish - GREEN */
+.leaflet-draw-actions li:first-child a,
+ul.leaflet-draw-actions li:first-child a {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Second button = Delete last point - ORANGE */
+.leaflet-draw-actions li:nth-child(2) a,
+ul.leaflet-draw-actions li:nth-child(2) a {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Last button = Cancel - RED */
+.leaflet-draw-actions li:last-child a,
+ul.leaflet-draw-actions li:last-child a {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Zoom controls styling */
+.leaflet-control-zoom {
+  border: none !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-control-zoom a {
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  font-size: 20px !important;
+  font-weight: bold !important;
+  background: white !important;
+  color: #1e293b !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #f1f5f9 !important;
+  color: #2563eb !important;
+}
+
+.leaflet-control-zoom-in {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* ========================================
+   Mobile Touch Drawing Improvements
+   ======================================== */
+
+/* Custom touch icon for drawing points */
+.leaflet-draw-touch-icon {
+  background: #10b981 !important;
+  border: 3px solid white !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  opacity: 0.9 !important;
+}
+
+/* Make vertex markers larger on touch devices */
+.leaflet-editing-icon,
+.leaflet-marker-icon.leaflet-div-icon {
+  width: 24px !important;
+  height: 24px !important;
+  margin-left: -12px !important;
+  margin-top: -12px !important;
+  background: #10b981 !important;
+  border: 3px solid white !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Larger touch targets for draw vertices */
+@media (max-width: 768px) {
+
+  .leaflet-editing-icon,
+  .leaflet-marker-icon.leaflet-div-icon,
+  .leaflet-draw-touch-icon {
+    width: 32px !important;
+    height: 32px !important;
+    margin-left: -16px !important;
+    margin-top: -16px !important;
+  }
+
+  /* Make drawn lines thicker on mobile */
+  .leaflet-interactive {
+    stroke-width: 4px !important;
+  }
+}
