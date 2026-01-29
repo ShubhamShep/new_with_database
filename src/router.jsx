@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createHashRouter, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
@@ -35,7 +35,7 @@ const ProtectedRoute = ({ children }) => {
     return session ? children : <Navigate to="/login" replace />;
 };
 
-const router = createBrowserRouter([
+const router = createHashRouter([
     {
         path: '/',
         element: <Navigate to="/dashboard" replace />,
