@@ -54,6 +54,13 @@ const MapComponent = ({ onBuildingSelect }) => {
     const [drawControl, setDrawControl] = useState(null); // Store the draw control instance
     const [showGPSAccuracy, setShowGPSAccuracy] = useState(false);
 
+    // Vertex editing and undo functionality
+    const [vertexHistory, setVertexHistory] = useState([]); // History for undo
+    const [currentVertices, setCurrentVertices] = useState([]); // Current polygon vertices
+    const [isEditMode, setIsEditMode] = useState(false); // Edit mode toggle
+    const [drawnPolygon, setDrawnPolygon] = useState(null); // Reference to drawn polygon layer
+    const [selectedVertexIndex, setSelectedVertexIndex] = useState(null); // Selected vertex for mobile
+
     // GPS Geolocation hook
     const {
         location: gpsLocation,
@@ -125,6 +132,90 @@ const MapComponent = ({ onBuildingSelect }) => {
         }
     };
 
+    // Undo last vertex - removes the last placed vertex
+    const handleUndoVertex = () => {
+        if (!drawControl) return;
+
+        try {
+            // For Leaflet.Draw, we can delete the last vertex
+            if (drawControl._markers && drawControl._markers.length > 0) {
+                drawControl.deleteLastVertex();
+
+                // Update vertex history
+                setVertexHistory(prev => {
+                    const newHistory = [...prev];
+                    newHistory.pop();
+                    return newHistory;
+                });
+            }
+        } catch (e) {
+            console.log('Undo not available:', e);
+        }
+    };
+
+    // Clear all vertices and cancel drawing
+    const handleClearDrawing = () => {
+        if (drawControl) {
+            try {
+                drawControl.disable();
+            } catch (e) {
+                // Ignore
+            }
+        }
+        setDrawControl(null);
+        setActiveTool(null);
+        setVertexHistory([]);
+        setCurrentVertices([]);
+        setLiveArea(null);
+
+        // Clear the feature group
+        if (featureGroupRef.current) {
+            featureGroupRef.current.clearLayers();
+        }
+    };
+
+    // Toggle vertex edit mode for existing polygon
+    const toggleEditMode = () => {
+        if (featureGroupRef.current) {
+            const layers = featureGroupRef.current.getLayers();
+            if (layers.length > 0) {
+                setIsEditMode(!isEditMode);
+
+                layers.forEach(layer => {
+                    if (layer.editing) {
+                        if (isEditMode) {
+                            layer.editing.disable();
+                        } else {
+                            layer.editing.enable();
+                        }
+                    }
+                });
+            }
+        }
+    };
+
+    // Track vertices as they are drawn
+    useEffect(() => {
+        if (!mapInstance) return;
+
+        const handleVertexAdded = (e) => {
+            // When a vertex is added during drawing
+            const layers = e.layers?._layers;
+            if (layers) {
+                const layerArray = Object.values(layers);
+                if (layerArray.length > 0 && layerArray[0]._latlng) {
+                    const newVertex = layerArray[0]._latlng;
+                    setVertexHistory(prev => [...prev, { lat: newVertex.lat, lng: newVertex.lng }]);
+                }
+            }
+        };
+
+        mapInstance.on('draw:drawvertex', handleVertexAdded);
+
+        return () => {
+            mapInstance.off('draw:drawvertex', handleVertexAdded);
+        };
+    }, [mapInstance]);
 
     // Listen for drawing events to calculate live area and handle created shapes
     useEffect(() => {
@@ -406,6 +497,53 @@ const MapComponent = ({ onBuildingSelect }) => {
                     </div>
                 </div>
 
+                {/* Editing Tools Card - Only show when drawing or has vertices */}
+                {(activeTool || vertexHistory.length > 0) && (
+                    <div className="bg-white rounded-2xl shadow-xl p-3 border border-gray-100">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Edit</p>
+                        <div className="flex flex-col gap-2">
+                            {/* Undo Button */}
+                            <button
+                                onClick={handleUndoVertex}
+                                disabled={!activeTool}
+                                className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center transition-all ${activeTool
+                                    ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-600 hover:from-yellow-100 hover:to-yellow-200 active:scale-95'
+                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    }`}
+                                title="Undo Last Point"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                                <span className="text-[9px] font-semibold mt-0.5">Undo</span>
+                            </button>
+
+                            {/* Clear Button */}
+                            <button
+                                onClick={handleClearDrawing}
+                                className="w-14 h-14 rounded-xl flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-red-100 text-red-500 hover:from-red-100 hover:to-red-200 active:scale-95 transition-all"
+                                title="Clear Drawing"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span className="text-[9px] font-semibold mt-0.5">Clear</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Vertex Counter - Shows during drawing */}
+                {activeTool && vertexHistory.length > 0 && (
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-2xl shadow-xl px-3 py-2 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Points</p>
+                        <p className="text-2xl font-bold">{vertexHistory.length}</p>
+                        <p className="text-[9px] opacity-70">
+                            {vertexHistory.length < 3 ? `Need ${3 - vertexHistory.length} more` : 'Ready to close'}
+                        </p>
+                    </div>
+                )}
+
                 {/* Location & Drone Buttons Card */}
                 <div className="bg-white rounded-2xl shadow-xl p-3 border border-gray-100 flex flex-col gap-2">
                     {/* Fly to Drone Imagery */}
@@ -472,14 +610,34 @@ const MapComponent = ({ onBuildingSelect }) => {
                 }
             `}</style>
 
-            {/* Instruction Banner - Only show when not drawing */}
-            {!activeTool && (
+            {/* Instruction Banner - Dynamic based on state */}
+            {!activeTool ? (
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000]">
                     <div className="bg-white/95 backdrop-blur-sm px-5 py-2.5 rounded-full shadow-lg border border-gray-100">
                         <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
                             <span className="text-lg">🎯</span>
                             <span>Select a tool and draw around the building</span>
                         </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] max-w-[90vw]">
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-3 rounded-2xl shadow-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="text-2xl animate-bounce">👆</div>
+                            <div>
+                                <p className="font-semibold text-sm">
+                                    {activeTool === 'polygon' && 'Tap to add corner points'}
+                                    {activeTool === 'rectangle' && 'Tap and drag to draw rectangle'}
+                                    {activeTool === 'marker' && 'Tap to place marker'}
+                                </p>
+                                <p className="text-xs opacity-90">
+                                    {activeTool === 'polygon' && 'Tap first point again to complete • Use Undo for mistakes'}
+                                    {activeTool === 'rectangle' && 'Drag corner to resize'}
+                                    {activeTool === 'marker' && 'Tap anywhere on the map'}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
