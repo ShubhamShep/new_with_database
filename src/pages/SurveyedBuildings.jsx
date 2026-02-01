@@ -44,33 +44,48 @@ const SurveyedBuildings = () => {
 
     const fetchBuildings = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('surveys')
-            .select('*')
-            .not('geometry', 'is', null)
-            .order('created_at', { ascending: false });
 
-        if (!error && data) {
-            setBuildings(data);
+        // Add timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+            console.warn('Fetch buildings timeout - setting loading to false');
+            setLoading(false);
+        }, 10000);
 
-            // Calculate stats
-            const residential = data.filter(b =>
-                b.property_type?.toLowerCase().includes('residential') ||
-                b.usage_type?.toLowerCase().includes('residential')
-            ).length;
-            const commercial = data.filter(b =>
-                b.property_type?.toLowerCase().includes('commercial') ||
-                b.usage_type?.toLowerCase().includes('commercial')
-            ).length;
+        try {
+            const { data, error } = await supabase
+                .from('surveys')
+                .select('*')
+                .not('geometry', 'is', null)
+                .order('created_at', { ascending: false });
 
-            setStats({
-                total: data.length,
-                residential,
-                commercial,
-                other: data.length - residential - commercial
-            });
+            if (!error && data) {
+                setBuildings(data);
+
+                // Calculate stats
+                const residential = data.filter(b =>
+                    b.property_type?.toLowerCase().includes('residential') ||
+                    b.usage_type?.toLowerCase().includes('residential')
+                ).length;
+                const commercial = data.filter(b =>
+                    b.property_type?.toLowerCase().includes('commercial') ||
+                    b.usage_type?.toLowerCase().includes('commercial')
+                ).length;
+
+                setStats({
+                    total: data.length,
+                    residential,
+                    commercial,
+                    other: data.length - residential - commercial
+                });
+            } else if (error) {
+                console.error('Error fetching buildings:', error);
+            }
+        } catch (err) {
+            console.error('Exception in fetchBuildings:', err);
+        } finally {
+            clearTimeout(timeoutId);
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // Filter buildings
