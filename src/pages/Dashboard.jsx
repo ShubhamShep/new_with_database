@@ -48,10 +48,6 @@ const Dashboard = () => {
                 .from('surveys')
                 .select('created_at, status');
 
-            if (error) {
-                console.error('Error fetching stats:', error);
-            }
-
             if (data) {
                 setStats({
                     total: data.length,
@@ -59,6 +55,9 @@ const Dashboard = () => {
                     thisWeek: data.filter(s => new Date(s.created_at) >= new Date(startOfWeek)).length,
                     thisMonth: data.filter(s => new Date(s.created_at) >= new Date(startOfMonth)).length,
                 });
+            } else if (error) {
+                console.error('Error fetching stats:', error);
+                // Do NOT clear stats on error, keep previous data if available
             }
         } catch (err) {
             console.error('fetchStats error:', err);
@@ -77,8 +76,10 @@ const Dashboard = () => {
 
             if (error) {
                 console.error('Error fetching recent surveys:', error);
+                // Keep existing data on error
+            } else if (data) {
+                setRecentSurveys(data);
             }
-            setRecentSurveys(data || []);
         } catch (err) {
             console.error('fetchRecentSurveys error:', err);
         }

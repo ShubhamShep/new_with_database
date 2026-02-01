@@ -36,8 +36,9 @@ const MyAssignments = () => {
 
             if (zonesError) {
                 console.error('Zones error:', zonesError);
+            } else if (zones) {
+                setAssignments(zones);
             }
-            setAssignments(zones || []);
 
             // Get user's survey count - also simplified
             const { data: surveys, error: surveysError } = await supabase
@@ -48,8 +49,9 @@ const MyAssignments = () => {
 
             if (surveysError) {
                 console.error('Surveys error:', surveysError);
+            } else if (surveys) {
+                setMySurveys(surveys);
             }
-            setMySurveys(surveys || []);
         } catch (err) {
             console.error('Error fetching assignments:', err);
         } finally {
