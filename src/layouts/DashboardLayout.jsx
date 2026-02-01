@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
+import { useAuth } from '../contexts/AuthContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const DashboardLayout = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { profile, isAdmin, isSupervisor, canManageZones, signOut } = useAuth();
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         navigate('/login');
     };
 
@@ -47,28 +52,64 @@ const DashboardLayout = () => {
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 p-4 space-y-2">
+                    <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                         <NavLink to="/dashboard" icon="📊" active={location.pathname === '/dashboard'} onClick={closeSidebar}>
-                            Dashboard
+                            {t('nav.dashboard')}
                         </NavLink>
                         <NavLink to="/survey" icon="🗺️" active={location.pathname === '/survey'} onClick={closeSidebar}>
-                            Survey Map
+                            {t('nav.surveyMap')}
                         </NavLink>
                         <NavLink to="/surveyed-buildings" icon="🏘️" active={location.pathname === '/surveyed-buildings'} onClick={closeSidebar}>
-                            All Buildings
+                            {t('nav.allBuildings')}
                         </NavLink>
-                        <NavLink to="/admin" icon="⚙️" active={location.pathname === '/admin'} onClick={closeSidebar}>
-                            Admin Panel
+                        <NavLink to="/my-assignments" icon="📋" active={location.pathname === '/my-assignments'} onClick={closeSidebar}>
+                            {t('nav.myAssignments')}
                         </NavLink>
+
+                        {/* Admin/Supervisor Section */}
+                        {canManageZones() && (
+                            <>
+                                <div className="pt-4 pb-2">
+                                    <p className="text-xs text-slate-500 uppercase tracking-wider px-4">Management</p>
+                                </div>
+                                <NavLink to="/zones" icon="🗺️" active={location.pathname === '/zones'} onClick={closeSidebar}>
+                                    {t('nav.zones')}
+                                </NavLink>
+                            </>
+                        )}
+
+                        {/* Admin Only */}
+                        {isAdmin() && (
+                            <>
+                                <NavLink to="/users" icon="👥" active={location.pathname === '/users'} onClick={closeSidebar}>
+                                    {t('nav.users')}
+                                </NavLink>
+                                <NavLink to="/admin" icon="⚙️" active={location.pathname === '/admin'} onClick={closeSidebar}>
+                                    {t('nav.admin')}
+                                </NavLink>
+                            </>
+                        )}
                     </nav>
 
-                    {/* Logout */}
-                    <div className="p-4 border-t border-slate-700">
+                    {/* User Info & Logout */}
+                    <div className="p-4 border-t border-slate-700 space-y-3">
+                        {/* User Info */}
+                        {profile && (
+                            <div className="flex items-center gap-3 px-2 py-2">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
+                                    {profile.full_name?.charAt(0) || profile.email?.charAt(0) || '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-white truncate">{profile.full_name || 'User'}</p>
+                                    <p className="text-xs text-slate-400 capitalize">{t(`roles.${profile.role}`)}</p>
+                                </div>
+                            </div>
+                        )}
                         <button
                             onClick={handleLogout}
                             className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors text-base"
                         >
-                            Logout
+                            {t('auth.logout')}
                         </button>
                     </div>
                 </div>
@@ -88,8 +129,8 @@ const DashboardLayout = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
-                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Property Survey System</h2>
-                    <div className="w-10" /> {/* Spacer for balance */}
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">{t('common.appName')}</h2>
+                    <LanguageSwitcher variant="compact" />
                 </header>
 
                 {/* Page Content */}

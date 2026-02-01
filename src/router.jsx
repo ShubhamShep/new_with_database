@@ -9,6 +9,10 @@ import Survey from './pages/Survey';
 import SurveyDetail from './pages/SurveyDetail';
 import Admin from './pages/Admin';
 import SurveyedBuildings from './pages/SurveyedBuildings';
+// V2 Pages
+import UserManagement from './pages/UserManagement';
+import ZoneManagement from './pages/ZoneManagement';
+import MyAssignments from './pages/MyAssignments';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -78,8 +82,22 @@ const router = createHashRouter([
                 path: 'surveyed-buildings',
                 element: <SurveyedBuildings />,
             },
+            // V2 Routes
+            {
+                path: 'users',
+                element: <UserManagement />,
+            },
+            {
+                path: 'zones',
+                element: <ZoneManagement />,
+            },
+            {
+                path: 'my-assignments',
+                element: <MyAssignments />,
+            },
         ],
     },
 ]);
 
 export default router;
+
