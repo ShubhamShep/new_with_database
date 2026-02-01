@@ -28,15 +28,24 @@ const Dashboard = () => {
     }, []);
 
     const fetchStats = async () => {
+        console.log('[Dashboard] fetchStats starting...');
         try {
             const now = new Date();
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
             const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
+            console.log('[Dashboard] Making stats query...');
             const { data, error } = await supabase
                 .from('surveys')
                 .select('created_at, status');
+
+            console.log('[Dashboard] Stats query result:', {
+                hasData: !!data,
+                dataCount: data?.length || 0,
+                hasError: !!error,
+                error: error
+            });
 
             if (data) {
                 setStats({
@@ -45,12 +54,20 @@ const Dashboard = () => {
                     thisWeek: data.filter(s => new Date(s.created_at) >= new Date(startOfWeek)).length,
                     thisMonth: data.filter(s => new Date(s.created_at) >= new Date(startOfMonth)).length,
                 });
+                console.log('[Dashboard] Stats set successfully');
             } else if (error) {
-                console.error('Error fetching stats:', error);
+                console.error('[Dashboard] Error fetching stats:', error);
+                console.error('[Dashboard] Error details:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
                 // Do NOT clear stats on error, keep previous data if available
             }
         } catch (err) {
-            console.error('fetchStats error:', err);
+            console.error('[Dashboard] fetchStats exception:', err);
+            console.error('[Dashboard] Exception stack:', err.stack);
         } finally {
             setLoading(false);
         }

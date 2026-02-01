@@ -43,22 +43,36 @@ const SurveyedBuildings = () => {
     }, []);
 
     const fetchBuildings = async () => {
+        console.log('[SurveyedBuildings] Starting fetchBuildings...');
         setLoading(true);
 
-        // Add timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-            console.warn('Fetch buildings timeout - setting loading to false');
-            setLoading(false);
-        }, 10000);
-
         try {
+            console.log('[SurveyedBuildings] Making Supabase query...');
             const { data, error } = await supabase
                 .from('surveys')
                 .select('*')
                 .not('geometry', 'is', null)
                 .order('created_at', { ascending: false });
 
+            console.log('[SurveyedBuildings] Query complete:', {
+                hasData: !!data,
+                dataCount: data?.length || 0,
+                hasError: !!error,
+                errorDetails: error
+            });
+
+            if (error) {
+                console.error('[SurveyedBuildings] Supabase error:', error);
+                console.error('[SurveyedBuildings] Error details:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
+            }
+
             if (!error && data) {
+                console.log('[SurveyedBuildings] Setting buildings data, count:', data.length);
                 setBuildings(data);
 
                 // Calculate stats
@@ -77,13 +91,13 @@ const SurveyedBuildings = () => {
                     commercial,
                     other: data.length - residential - commercial
                 });
-            } else if (error) {
-                console.error('Error fetching buildings:', error);
+                console.log('[SurveyedBuildings] Stats calculated:', { residential, commercial, total: data.length });
             }
         } catch (err) {
-            console.error('Exception in fetchBuildings:', err);
+            console.error('[SurveyedBuildings] Exception in fetchBuildings:', err);
+            console.error('[SurveyedBuildings] Exception stack:', err.stack);
         } finally {
-            clearTimeout(timeoutId);
+            console.log('[SurveyedBuildings] Setting loading to false');
             setLoading(false);
         }
     };

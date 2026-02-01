@@ -14,42 +14,77 @@ const MyAssignments = () => {
     // Fetch assigned zones with timeout
     // Fetch assigned zones - simplified
     const fetchAssignments = async () => {
+        console.log('[MyAssignments] fetchAssignments starting...');
         if (!user) {
+            console.log('[MyAssignments] No user, skipping fetch');
             setLoading(false);
             return;
         }
 
+        console.log('[MyAssignments] User ID:', user.id);
         setLoading(true);
 
         try {
             // Get zones assigned to current user
+            console.log('[MyAssignments] Fetching zones...');
             const { data: zones, error: zonesError } = await supabase
                 .from('survey_zones')
                 .select('*')
                 .eq('assigned_to', user.id)
                 .order('created_at', { ascending: false });
 
+            console.log('[MyAssignments] Zones query result:', {
+                hasZones: !!zones,
+                zonesCount: zones?.length || 0,
+                hasError: !!zonesError,
+                error: zonesError
+            });
+
             if (zonesError) {
-                console.error('Zones error:', zonesError);
+                console.error('[MyAssignments] Zones error:', zonesError);
+                console.error('[MyAssignments] Zones error details:', {
+                    message: zonesError.message,
+                    details: zonesError.details,
+                    hint: zonesError.hint,
+                    code: zonesError.code
+                });
             } else if (zones) {
                 setAssignments(zones);
+                console.log('[MyAssignments] Assignments set, count:', zones.length);
             }
 
             // Get user's survey count
+            console.log('[MyAssignments] Fetching surveys...');
             const { data: surveys, error: surveysError } = await supabase
                 .from('surveys')
                 .select('id, created_at')
                 .order('created_at', { ascending: false })
                 .limit(50);
 
+            console.log('[MyAssignments] Surveys query result:', {
+                hasSurveys: !!surveys,
+                surveysCount: surveys?.length || 0,
+                hasError: !!surveysError,
+                error: surveysError
+            });
+
             if (surveysError) {
-                console.error('Surveys error:', surveysError);
+                console.error('[MyAssignments] Surveys error:', surveysError);
+                console.error('[MyAssignments] Surveys error details:', {
+                    message: surveysError.message,
+                    details: surveysError.details,
+                    hint: surveysError.hint,
+                    code: surveysError.code
+                });
             } else if (surveys) {
                 setMySurveys(surveys);
+                console.log('[MyAssignments] Surveys set, count:', surveys.length);
             }
         } catch (err) {
-            console.error('Error fetching assignments:', err);
+            console.error('[MyAssignments] Error fetching assignments:', err);
+            console.error('[MyAssignments] Exception stack:', err.stack);
         } finally {
+            console.log('[MyAssignments] Setting loading to false');
             setLoading(false);
         }
     };
