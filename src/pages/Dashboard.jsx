@@ -24,6 +24,17 @@ const Dashboard = () => {
     useEffect(() => {
         fetchStats();
         fetchRecentSurveys();
+
+        // Refetch when tab becomes visible again
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchStats();
+                fetchRecentSurveys();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
     const fetchStats = async () => {

@@ -11,7 +11,7 @@ const MyAssignments = () => {
     const [mySurveys, setMySurveys] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch assigned zones
+    // Fetch assigned zones with timeout
     const fetchAssignments = async () => {
         if (!user) {
             setLoading(false);
@@ -19,6 +19,13 @@ const MyAssignments = () => {
         }
 
         setLoading(true);
+
+        // Add timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+            console.warn('Fetch timeout - setting loading to false');
+            setLoading(false);
+        }, 10000);
+
         try {
             // Get zones assigned to current user - simplified query
             const { data: zones, error: zonesError } = await supabase
@@ -29,7 +36,6 @@ const MyAssignments = () => {
 
             if (zonesError) {
                 console.error('Zones error:', zonesError);
-                // Continue even if zones query fails (table might not have data)
             }
             setAssignments(zones || []);
 
@@ -47,12 +53,23 @@ const MyAssignments = () => {
         } catch (err) {
             console.error('Error fetching assignments:', err);
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchAssignments();
+
+        // Refetch when tab becomes visible again
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && user) {
+                fetchAssignments();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [user]);
 
     const getPriorityBadge = (priority) => {
