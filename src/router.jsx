@@ -24,7 +24,22 @@ const ProtectedRoute = ({ children }) => {
         let mounted = true;
         let noSessionTimeout = null;
 
-        // Listen for auth changes FIRST - this is the primary source of truth
+        // Check session immediately to avoid waiting for listener
+        const checkSession = async () => {
+            try {
+                const { data } = await supabase.auth.getSession();
+                if (mounted && data.session) {
+                    setSession(data.session);
+                    setLoading(false);
+                    setInitialCheckDone(true);
+                }
+            } catch (error) {
+                console.error('Error checking session:', error);
+            }
+        };
+        checkSession();
+
+        // Listen for auth changes - this is the primary source of truth for updates
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event, session ? 'Has session' : 'No session');
 

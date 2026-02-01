@@ -12,18 +12,23 @@ const MyAssignments = () => {
     const [loading, setLoading] = useState(true);
 
     // Fetch assigned zones with timeout
-    const fetchAssignments = async () => {
+    // Fetch assigned zones with timeout parameter used for silent updates
+    const fetchAssignments = async (showLoading = true) => {
         if (!user) {
             setLoading(false);
             return;
         }
 
-        setLoading(true);
+        if (showLoading) {
+            setLoading(true);
+        }
 
         // Add timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
-            console.warn('Fetch timeout - setting loading to false');
-            setLoading(false);
+            if (showLoading) {
+                console.warn('Fetch timeout - setting loading to false');
+                setLoading(false);
+            }
         }, 10000);
 
         try {
@@ -56,17 +61,19 @@ const MyAssignments = () => {
             console.error('Error fetching assignments:', err);
         } finally {
             clearTimeout(timeoutId);
-            setLoading(false);
+            if (showLoading) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
-        fetchAssignments();
+        fetchAssignments(true);
 
         // Refetch when tab becomes visible again
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && user) {
-                fetchAssignments();
+                fetchAssignments(false); // Silent update
             }
         };
 
