@@ -22,40 +22,33 @@ const ProtectedRoute = ({ children }) => {
     React.useEffect(() => {
         let mounted = true;
 
-        // Get initial session
-        const checkSession = async () => {
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (mounted) {
-                    if (error) {
-                        console.error('Auth error:', error);
-                    }
-                    console.log('Session check result:', session ? 'Authenticated' : 'Not authenticated');
-                    setSession(session);
-                    setLoading(false);
-                }
-            } catch (err) {
-                console.error('getSession failed:', err);
-                if (mounted) {
-                    setSession(null);
-                    setLoading(false);
-                }
-            }
-        };
-
-        checkSession();
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            console.log('Auth state changed:', _event, session ? 'Has session' : 'No session');
+        // Listen for auth changes FIRST - this is the primary source of truth
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state changed:', event, session ? 'Has session' : 'No session');
             if (mounted) {
                 setSession(session);
-                setLoading(false);
+                // Only stop loading after we get a definitive auth state
+                if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+                    setLoading(false);
+                }
             }
         });
 
+        // Fallback: If no auth event fires within 3 seconds, check session manually
+        const fallbackTimeout = setTimeout(async () => {
+            if (mounted && loading) {
+                console.log('Fallback session check...');
+                const { data: { session } } = await supabase.auth.getSession();
+                if (mounted) {
+                    setSession(session);
+                    setLoading(false);
+                }
+            }
+        }, 3000);
+
         return () => {
             mounted = false;
+            clearTimeout(fallbackTimeout);
             subscription.unsubscribe();
         };
     }, []);
@@ -63,9 +56,9 @@ const ProtectedRoute = ({ children }) => {
     // Show loading while checking session
     if (loading || session === undefined) {
         return (
-            <div className="flex items-center justify-center h-screen">
+            <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-blue-50">
                 <div className="text-center">
-                    <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-gray-600">Checking authentication...</p>
                 </div>
             </div>
