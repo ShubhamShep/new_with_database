@@ -27,34 +27,50 @@ const Dashboard = () => {
     }, []);
 
     const fetchStats = async () => {
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        try {
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+            const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-        const { data, error } = await supabase
-            .from('surveys')
-            .select('created_at, status');
+            const { data, error } = await supabase
+                .from('surveys')
+                .select('created_at, status');
 
-        if (!error && data) {
-            setStats({
-                total: data.length,
-                today: data.filter(s => new Date(s.created_at) >= new Date(startOfDay)).length,
-                thisWeek: data.filter(s => new Date(s.created_at) >= new Date(startOfWeek)).length,
-                thisMonth: data.filter(s => new Date(s.created_at) >= new Date(startOfMonth)).length,
-            });
+            if (error) {
+                console.error('Error fetching stats:', error);
+            }
+
+            if (data) {
+                setStats({
+                    total: data.length,
+                    today: data.filter(s => new Date(s.created_at) >= new Date(startOfDay)).length,
+                    thisWeek: data.filter(s => new Date(s.created_at) >= new Date(startOfWeek)).length,
+                    thisMonth: data.filter(s => new Date(s.created_at) >= new Date(startOfMonth)).length,
+                });
+            }
+        } catch (err) {
+            console.error('fetchStats error:', err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const fetchRecentSurveys = async () => {
-        const { data } = await supabase
-            .from('surveys')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(20);
+        try {
+            const { data, error } = await supabase
+                .from('surveys')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
 
-        setRecentSurveys(data || []);
+            if (error) {
+                console.error('Error fetching recent surveys:', error);
+            }
+            setRecentSurveys(data || []);
+        } catch (err) {
+            console.error('fetchRecentSurveys error:', err);
+        }
     };
 
     const handleDeleteSurvey = async (id) => {

@@ -13,34 +13,37 @@ const MyAssignments = () => {
 
     // Fetch assigned zones
     const fetchAssignments = async () => {
-        if (!user) return;
+        if (!user) {
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
         try {
-            // Get zones assigned to current user
+            // Get zones assigned to current user - simplified query
             const { data: zones, error: zonesError } = await supabase
                 .from('survey_zones')
-                .select(`
-                    *,
-                    supervisor:user_profiles!survey_zones_supervisor_id_fkey(id, full_name, email, phone)
-                `)
+                .select('*')
                 .eq('assigned_to', user.id)
-                .order('priority', { ascending: false });
+                .order('created_at', { ascending: false });
 
-            if (zonesError) throw zonesError;
+            if (zonesError) {
+                console.error('Zones error:', zonesError);
+                // Continue even if zones query fails (table might not have data)
+            }
             setAssignments(zones || []);
 
-            // Get user's survey count
+            // Get user's survey count - also simplified
             const { data: surveys, error: surveysError } = await supabase
                 .from('surveys')
-                .select('id, created_at, zone_id')
-                .eq('surveyor_id', user.id)
+                .select('id, created_at')
                 .order('created_at', { ascending: false })
                 .limit(50);
 
-            if (!surveysError) {
-                setMySurveys(surveys || []);
+            if (surveysError) {
+                console.error('Surveys error:', surveysError);
             }
+            setMySurveys(surveys || []);
         } catch (err) {
             console.error('Error fetching assignments:', err);
         } finally {

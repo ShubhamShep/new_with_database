@@ -11,11 +11,23 @@ const Login = () => {
 
     // Check if user is already logged in
     useEffect(() => {
+        let mounted = true;
+
+        // Timeout to prevent infinite loading
+        const timeout = setTimeout(() => {
+            if (mounted) setCheckingSession(false);
+        }, 3000);
+
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                navigate('/dashboard', { replace: true });
+            if (mounted) {
+                if (session) {
+                    navigate('/dashboard', { replace: true });
+                }
+                setCheckingSession(false);
             }
-            setCheckingSession(false);
+        }).catch(err => {
+            console.error('Session check failed:', err);
+            if (mounted) setCheckingSession(false);
         });
 
         // Listen for auth changes
@@ -25,7 +37,11 @@ const Login = () => {
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            mounted = false;
+            clearTimeout(timeout);
+            subscription.unsubscribe();
+        };
     }, [navigate]);
 
     const handleAuth = async (isSignUp) => {

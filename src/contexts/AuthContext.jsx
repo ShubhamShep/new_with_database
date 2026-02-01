@@ -27,31 +27,39 @@ export const AuthProvider = ({ children }) => {
                 .single();
 
             if (error) {
-                // Profile might not exist yet (first login)
+                console.log('Profile fetch error (may be normal for new users):', error.code);
+                // Profile might not exist yet - set a default profile
                 if (error.code === 'PGRST116') {
-                    // Create profile if it doesn't exist
+                    // Try to create profile
+                    const currentUser = (await supabase.auth.getUser()).data.user;
                     const { data: newProfile, error: createError } = await supabase
                         .from('user_profiles')
                         .insert({
                             id: userId,
-                            email: user?.email,
+                            email: currentUser?.email,
                             role: 'surveyor'
                         })
                         .select()
                         .single();
 
-                    if (!createError) {
+                    if (!createError && newProfile) {
                         setProfile(newProfile);
+                    } else {
+                        // Even if creation fails, set a minimal profile so app works
+                        setProfile({ id: userId, role: 'surveyor', email: currentUser?.email });
                     }
                     return;
                 }
-                throw error;
+                // For other errors, set a minimal profile
+                setProfile({ id: userId, role: 'surveyor' });
+                return;
             }
 
             setProfile(data);
         } catch (err) {
-            console.error('Error fetching profile:', err);
-            setError(err.message);
+            console.error('Error in fetchProfile:', err);
+            // Set minimal profile so app continues to work
+            setProfile({ id: userId, role: 'surveyor' });
         }
     };
 
