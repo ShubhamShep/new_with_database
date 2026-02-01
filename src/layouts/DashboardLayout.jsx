@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { APP_VERSION } from '../version';
 
 const DashboardLayout = () => {
     const { t } = useTranslation();
@@ -111,6 +112,11 @@ const DashboardLayout = () => {
                         >
                             {t('auth.logout')}
                         </button>
+
+                        {/* Version Display */}
+                        <div className="text-center pt-2 border-t border-slate-700 mt-2">
+                            <p className="text-xs text-slate-500">{APP_VERSION}</p>
+                        </div>
                     </div>
                 </div>
             </aside>

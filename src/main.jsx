@@ -17,7 +17,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 );
 
+
+// Service Worker disabled until caching issues are resolved
 // Register Service Worker for PWA
+/*
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     // Use relative path for GitHub Pages compatibility
@@ -29,5 +32,16 @@ if ('serviceWorker' in navigator) {
       .catch((error) => {
         console.log('SW registration failed:', error);
       });
+  });
+}
+*/
+
+// Unregister any existing service workers
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function (registrations) {
+    for (let registration of registrations) {
+      registration.unregister();
+      console.log('Unregistered service worker:', registration.scope);
+    }
   });
 }
