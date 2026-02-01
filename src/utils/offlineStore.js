@@ -11,48 +11,90 @@ const STORES = {
 };
 
 let db = null;
+let dbError = false;
+
+/**
+ * Check if database connection is valid
+ */
+const isDbValid = () => {
+    if (!db) return false;
+    try {
+        // Try to access a property that would fail if connection is closed
+        return db.objectStoreNames !== undefined;
+    } catch {
+        return false;
+    }
+};
 
 /**
  * Initialize the IndexedDB database
  */
 export const initDB = () => {
     return new Promise((resolve, reject) => {
-        if (db) {
+        // If we already have a valid connection, use it
+        if (isDbValid()) {
             resolve(db);
             return;
         }
 
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        // Reset the db variable to force new connection
+        db = null;
 
-        request.onerror = () => {
-            console.error('Error opening IndexedDB:', request.error);
-            reject(request.error);
-        };
+        // If we've had errors, don't keep trying
+        if (dbError) {
+            resolve(null);
+            return;
+        }
 
-        request.onsuccess = () => {
-            db = request.result;
-            console.log('IndexedDB initialized successfully');
-            resolve(db);
-        };
+        try {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onupgradeneeded = (event) => {
-            const database = event.target.result;
+            request.onerror = () => {
+                console.error('Error opening IndexedDB:', request.error);
+                dbError = true;
+                resolve(null); // Resolve with null instead of rejecting
+            };
 
-            // Create pending surveys store
-            if (!database.objectStoreNames.contains(STORES.PENDING_SURVEYS)) {
-                const surveyStore = database.createObjectStore(STORES.PENDING_SURVEYS, {
-                    keyPath: 'id',
-                    autoIncrement: true
-                });
-                surveyStore.createIndex('timestamp', 'timestamp', { unique: false });
-                surveyStore.createIndex('status', 'status', { unique: false });
-            }
+            request.onsuccess = () => {
+                db = request.result;
 
-            // Create cached data store for app data
-            if (!database.objectStoreNames.contains(STORES.CACHED_DATA)) {
-                database.createObjectStore(STORES.CACHED_DATA, { keyPath: 'key' });
-            }
-        };
+                // Handle connection closing unexpectedly
+                db.onclose = () => {
+                    console.log('IndexedDB connection closed');
+                    db = null;
+                };
+
+                db.onerror = (event) => {
+                    console.error('IndexedDB error:', event);
+                };
+
+                console.log('IndexedDB initialized successfully');
+                resolve(db);
+            };
+
+            request.onupgradeneeded = (event) => {
+                const database = event.target.result;
+
+                // Create pending surveys store
+                if (!database.objectStoreNames.contains(STORES.PENDING_SURVEYS)) {
+                    const surveyStore = database.createObjectStore(STORES.PENDING_SURVEYS, {
+                        keyPath: 'id',
+                        autoIncrement: true
+                    });
+                    surveyStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    surveyStore.createIndex('status', 'status', { unique: false });
+                }
+
+                // Create cached data store for app data
+                if (!database.objectStoreNames.contains(STORES.CACHED_DATA)) {
+                    database.createObjectStore(STORES.CACHED_DATA, { keyPath: 'key' });
+                }
+            };
+        } catch (err) {
+            console.error('IndexedDB not available:', err);
+            dbError = true;
+            resolve(null);
+        }
     });
 };
 
@@ -62,29 +104,40 @@ export const initDB = () => {
 export const addPendingSurvey = async (surveyData) => {
     const database = await initDB();
 
+    // If no database available, return null
+    if (!database) {
+        console.warn('IndexedDB not available, cannot queue survey');
+        return null;
+    }
+
     return new Promise((resolve, reject) => {
-        const transaction = database.transaction([STORES.PENDING_SURVEYS], 'readwrite');
-        const store = transaction.objectStore(STORES.PENDING_SURVEYS);
+        try {
+            const transaction = database.transaction([STORES.PENDING_SURVEYS], 'readwrite');
+            const store = transaction.objectStore(STORES.PENDING_SURVEYS);
 
-        const pendingSurvey = {
-            ...surveyData,
-            timestamp: Date.now(),
-            status: 'pending', // pending, syncing, failed, synced
-            attempts: 0,
-            lastAttempt: null
-        };
+            const pendingSurvey = {
+                ...surveyData,
+                timestamp: Date.now(),
+                status: 'pending', // pending, syncing, failed, synced
+                attempts: 0,
+                lastAttempt: null
+            };
 
-        const request = store.add(pendingSurvey);
+            const request = store.add(pendingSurvey);
 
-        request.onsuccess = () => {
-            console.log('Survey added to pending queue, ID:', request.result);
-            resolve(request.result);
-        };
+            request.onsuccess = () => {
+                console.log('Survey added to pending queue, ID:', request.result);
+                resolve(request.result);
+            };
 
-        request.onerror = () => {
-            console.error('Error adding survey to queue:', request.error);
-            reject(request.error);
-        };
+            request.onerror = () => {
+                console.error('Error adding survey to queue:', request.error);
+                reject(request.error);
+            };
+        } catch (err) {
+            console.error('Transaction error:', err);
+            resolve(null);
+        }
     });
 };
 
@@ -94,18 +147,29 @@ export const addPendingSurvey = async (surveyData) => {
 export const getPendingSurveys = async () => {
     const database = await initDB();
 
-    return new Promise((resolve, reject) => {
-        const transaction = database.transaction([STORES.PENDING_SURVEYS], 'readonly');
-        const store = transaction.objectStore(STORES.PENDING_SURVEYS);
-        const request = store.getAll();
+    // If no database available, return empty array
+    if (!database) {
+        return [];
+    }
 
-        request.onsuccess = () => {
-            resolve(request.result || []);
-        };
+    return new Promise((resolve) => {
+        try {
+            const transaction = database.transaction([STORES.PENDING_SURVEYS], 'readonly');
+            const store = transaction.objectStore(STORES.PENDING_SURVEYS);
+            const request = store.getAll();
 
-        request.onerror = () => {
-            reject(request.error);
-        };
+            request.onsuccess = () => {
+                resolve(request.result || []);
+            };
+
+            request.onerror = () => {
+                console.error('Error getting pending surveys:', request.error);
+                resolve([]);
+            };
+        } catch (err) {
+            console.error('Transaction error:', err);
+            resolve([]);
+        }
     });
 };
 
@@ -113,8 +177,13 @@ export const getPendingSurveys = async () => {
  * Get pending surveys count
  */
 export const getPendingCount = async () => {
-    const surveys = await getPendingSurveys();
-    return surveys.filter(s => s.status === 'pending' || s.status === 'failed').length;
+    try {
+        const surveys = await getPendingSurveys();
+        return surveys.filter(s => s.status === 'pending' || s.status === 'failed').length;
+    } catch (err) {
+        console.error('Error getting pending count:', err);
+        return 0;
+    }
 };
 
 /**

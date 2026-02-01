@@ -20,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    // Use relative path for GitHub Pages compatibility
+    const swPath = import.meta.env.BASE_URL + 'sw.js';
+    navigator.serviceWorker.register(swPath)
       .then((registration) => {
         console.log('SW registered:', registration);
       })

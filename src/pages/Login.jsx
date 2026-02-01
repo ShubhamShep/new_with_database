@@ -30,10 +30,14 @@ const Login = () => {
             if (mounted) setCheckingSession(false);
         });
 
-        // Listen for auth changes
+        // Listen for auth changes - this handles navigation after login
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                navigate('/dashboard', { replace: true });
+            console.log('Login page - Auth event:', event);
+            if (event === 'SIGNED_IN' && session) {
+                // Add small delay to ensure session is persisted
+                setTimeout(() => {
+                    navigate('/dashboard', { replace: true });
+                }, 100);
             }
         });
 
@@ -57,7 +61,7 @@ const Login = () => {
                     email,
                     password,
                     options: {
-                        emailRedirectTo: window.location.origin + '/dashboard'
+                        emailRedirectTo: window.location.origin + '/new_with_database/#/dashboard'
                     }
                 })
                 : await supabase.auth.signInWithPassword({ email, password });
@@ -66,14 +70,13 @@ const Login = () => {
 
             if (isSignUp) {
                 alert('Sign up successful! You can now log in.');
-            } else if (data.session) {
-                // Successful login - navigate to dashboard
-                navigate('/dashboard', { replace: true });
+                setLoading(false);
             }
+            // Don't navigate here - let onAuthStateChange handle it
+            // This ensures the session is fully established before navigating
         } catch (error) {
             console.error('Auth error:', error.message);
             alert(error.message);
-        } finally {
             setLoading(false);
         }
     };

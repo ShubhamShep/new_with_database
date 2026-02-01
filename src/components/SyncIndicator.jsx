@@ -35,8 +35,8 @@ const SyncIndicator = ({ onSyncComplete }) => {
             }
         });
 
-        // Periodically check pending count
-        const interval = setInterval(updatePendingCount, 5000);
+        // Periodically check pending count (reduced frequency to avoid performance issues)
+        const interval = setInterval(updatePendingCount, 30000);
 
         return () => {
             cleanup();
@@ -136,10 +136,10 @@ const SyncIndicator = ({ onSyncComplete }) => {
             <div
                 onClick={() => setShowDetails(!showDetails)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg cursor-pointer transition-all ${!online
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
-                        : pendingCount > 0
-                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
-                            : 'bg-green-500 text-white'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
+                    : pendingCount > 0
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
+                        : 'bg-green-500 text-white'
                     }`}
             >
                 {/* Status Icon */}

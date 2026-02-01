@@ -18,37 +18,58 @@ import MyAssignments from './pages/MyAssignments';
 const ProtectedRoute = ({ children }) => {
     const [session, setSession] = React.useState(undefined); // undefined = not checked yet
     const [loading, setLoading] = React.useState(true);
+    const [initialCheckDone, setInitialCheckDone] = React.useState(false);
 
     React.useEffect(() => {
         let mounted = true;
+        let noSessionTimeout = null;
 
         // Listen for auth changes FIRST - this is the primary source of truth
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             console.log('Auth state changed:', event, session ? 'Has session' : 'No session');
+
             if (mounted) {
-                setSession(session);
-                // Only stop loading after we get a definitive auth state
-                if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+                if (session) {
+                    // We have a session - immediately update and stop loading
+                    setSession(session);
+                    setLoading(false);
+                    setInitialCheckDone(true);
+                    if (noSessionTimeout) clearTimeout(noSessionTimeout);
+                } else if (event === 'INITIAL_SESSION' && !session) {
+                    // No session on initial check - wait a bit to be sure
+                    // This gives time for the session to be restored from storage
+                    noSessionTimeout = setTimeout(() => {
+                        if (mounted && !initialCheckDone) {
+                            console.log('No session confirmed after delay');
+                            setSession(null);
+                            setLoading(false);
+                            setInitialCheckDone(true);
+                        }
+                    }, 1500);
+                } else if (event === 'SIGNED_OUT') {
+                    setSession(null);
                     setLoading(false);
                 }
             }
         });
 
-        // Fallback: If no auth event fires within 3 seconds, check session manually
+        // Fallback: If nothing happens within 5 seconds, check session manually
         const fallbackTimeout = setTimeout(async () => {
-            if (mounted && loading) {
+            if (mounted && loading && !initialCheckDone) {
                 console.log('Fallback session check...');
                 const { data: { session } } = await supabase.auth.getSession();
                 if (mounted) {
                     setSession(session);
                     setLoading(false);
+                    setInitialCheckDone(true);
                 }
             }
-        }, 3000);
+        }, 5000);
 
         return () => {
             mounted = false;
             clearTimeout(fallbackTimeout);
+            if (noSessionTimeout) clearTimeout(noSessionTimeout);
             subscription.unsubscribe();
         };
     }, []);
