@@ -1,7 +1,12 @@
 -- ============================================
--- INDICES V2.0 Database Migration
--- Multi-Language, User Roles, Survey Assignment
+-- INDICES V2.0 Database Migration (FIXED)
+-- Run this if the previous migration failed
 -- ============================================
+
+-- Drop failed policies first (if they exist)
+DROP POLICY IF EXISTS "Surveyors can view assigned surveys" ON public.surveys;
+DROP POLICY IF EXISTS "Users can update surveys" ON public.surveys;
+DROP POLICY IF EXISTS "Authenticated users can insert surveys" ON public.surveys;
 
 -- 1. USER PROFILES TABLE (with roles)
 -- ============================================
@@ -20,6 +25,11 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 
 -- Enable RLS on user_profiles
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies and recreate
+DROP POLICY IF EXISTS "Users can view all profiles" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Admins can manage profiles" ON public.user_profiles;
 
 -- Policy: Users can read all profiles
 CREATE POLICY "Users can view all profiles" ON public.user_profiles
@@ -44,14 +54,14 @@ CREATE TABLE IF NOT EXISTS public.survey_zones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     description TEXT,
-    geometry JSONB, -- GeoJSON polygon defining the zone boundary
-    color TEXT DEFAULT '#3B82F6', -- Zone color on map
+    geometry JSONB,
+    color TEXT DEFAULT '#3B82F6',
     assigned_to UUID REFERENCES public.user_profiles(id),
     supervisor_id UUID REFERENCES public.user_profiles(id),
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'on_hold')),
     priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
-    target_count INTEGER DEFAULT 0, -- Target number of surveys
-    completed_count INTEGER DEFAULT 0, -- Completed surveys count
+    target_count INTEGER DEFAULT 0,
+    completed_count INTEGER DEFAULT 0,
     due_date DATE,
     notes TEXT,
     created_by UUID REFERENCES public.user_profiles(id),
@@ -62,11 +72,13 @@ CREATE TABLE IF NOT EXISTS public.survey_zones (
 -- Enable RLS on survey_zones
 ALTER TABLE public.survey_zones ENABLE ROW LEVEL SECURITY;
 
--- Policy: All authenticated users can view zones
+-- Drop and recreate zone policies
+DROP POLICY IF EXISTS "Users can view zones" ON public.survey_zones;
+DROP POLICY IF EXISTS "Admins can manage zones" ON public.survey_zones;
+
 CREATE POLICY "Users can view zones" ON public.survey_zones
     FOR SELECT USING (auth.role() = 'authenticated');
 
--- Policy: Admins and supervisors can manage zones
 CREATE POLICY "Admins can manage zones" ON public.survey_zones
     FOR ALL USING (
         EXISTS (
@@ -85,14 +97,15 @@ ADD COLUMN IF NOT EXISTS review_status TEXT DEFAULT 'pending' CHECK (review_stat
 ADD COLUMN IF NOT EXISTS review_notes TEXT,
 ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
 
--- 4. UPDATE SURVEYS RLS POLICIES
+-- 4. UPDATE SURVEYS RLS POLICIES (FIXED - no user_id reference)
 -- ============================================
--- Drop existing policies if any
 DROP POLICY IF EXISTS "Users can view own surveys" ON public.surveys;
 DROP POLICY IF EXISTS "Users can insert surveys" ON public.surveys;
 DROP POLICY IF EXISTS "Users can update own surveys" ON public.surveys;
+DROP POLICY IF EXISTS "Surveyors can view assigned surveys" ON public.surveys;
+DROP POLICY IF EXISTS "Authenticated users can insert surveys" ON public.surveys;
+DROP POLICY IF EXISTS "Users can update surveys" ON public.surveys;
 
--- New policies based on roles
 -- Surveyors can view their own surveys and surveys in their assigned zones
 CREATE POLICY "Surveyors can view assigned surveys" ON public.surveys
     FOR SELECT USING (
@@ -132,7 +145,8 @@ BEGIN
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
         'surveyor'
-    );
+    )
+    ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -148,7 +162,6 @@ CREATE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION public.update_zone_survey_count()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Update completed count for the zone
     IF NEW.zone_id IS NOT NULL THEN
         UPDATE public.survey_zones
         SET completed_count = (
@@ -187,6 +200,14 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON public.user_profiles(role);
 GRANT ALL ON public.user_profiles TO authenticated;
 GRANT ALL ON public.survey_zones TO authenticated;
 
+-- 9. CREATE PROFILE FOR EXISTING USERS
 -- ============================================
--- Run this migration in Supabase SQL Editor
+INSERT INTO public.user_profiles (id, email, full_name, role)
+SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', email), 'surveyor'
+FROM auth.users
+WHERE id NOT IN (SELECT id FROM public.user_profiles)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- Migration Complete!
 -- ============================================
