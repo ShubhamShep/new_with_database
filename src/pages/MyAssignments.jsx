@@ -12,27 +12,17 @@ const MyAssignments = () => {
     const [loading, setLoading] = useState(true);
 
     // Fetch assigned zones with timeout
-    // Fetch assigned zones with timeout parameter used for silent updates
-    const fetchAssignments = async (showLoading = true) => {
+    // Fetch assigned zones - simplified
+    const fetchAssignments = async () => {
         if (!user) {
             setLoading(false);
             return;
         }
 
-        if (showLoading) {
-            setLoading(true);
-        }
-
-        // Add timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-            if (showLoading) {
-                console.warn('Fetch timeout - setting loading to false');
-                setLoading(false);
-            }
-        }, 10000);
+        setLoading(true);
 
         try {
-            // Get zones assigned to current user - simplified query
+            // Get zones assigned to current user
             const { data: zones, error: zonesError } = await supabase
                 .from('survey_zones')
                 .select('*')
@@ -45,7 +35,7 @@ const MyAssignments = () => {
                 setAssignments(zones);
             }
 
-            // Get user's survey count - also simplified
+            // Get user's survey count
             const { data: surveys, error: surveysError } = await supabase
                 .from('surveys')
                 .select('id, created_at')
@@ -60,25 +50,13 @@ const MyAssignments = () => {
         } catch (err) {
             console.error('Error fetching assignments:', err);
         } finally {
-            clearTimeout(timeoutId);
-            if (showLoading) {
-                setLoading(false);
-            }
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchAssignments(true);
-
-        // Refetch when tab becomes visible again
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible' && user) {
-                fetchAssignments(false); // Silent update
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        fetchAssignments();
+        // Removed visibility change handler - was causing issues
     }, [user]);
 
     const getPriorityBadge = (priority) => {
