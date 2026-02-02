@@ -45,6 +45,16 @@ const Dashboard = () => {
         }
     };
 
+    // Navigate to map and highlight survey
+    const viewOnMap = (survey) => {
+        if (!survey.geometry) {
+            toast.error('This survey has no location data');
+            return;
+        }
+        // Navigate to map with survey ID as state
+        navigate('/surveyed-buildings', { state: { highlightSurveyId: survey.id } });
+    };
+
     // Handle export
     const handleExportExcel = () => {
         if (surveys.length === 0) {
