@@ -4,16 +4,21 @@ import { RouterProvider } from 'react-router-dom';
 import router from './router';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingOverlay from './components/LoadingOverlay';
 import './i18n'; // Initialize i18n
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <ToastProvider>
-        <RouterProvider router={router} />
-      </ToastProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+          <LoadingOverlay />
+        </ToastProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 
