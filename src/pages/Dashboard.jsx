@@ -10,7 +10,10 @@ import { exportToExcel, exportToCSV } from '../utils/exportToExcel';
 const Dashboard = () => {
     const navigate = useNavigate();
     const toast = useToast();
-    const { surveys, stats, loading, lastUpdate } = useAllData();
+    const surveys = useDataStore('surveys');
+    const stats = useDataStore('stats');
+    const loading = useDataStore('loading');
+    const lastUpdate = useDataStore('lastUpdate');
 
     // Manual refresh - only when user clicks
     const handleRefresh = async () => {
