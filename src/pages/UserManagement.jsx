@@ -1,52 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataStore } from '../hooks/useDataStore';
+import { dataService } from '../utils/dataService';
 import RoleGuard, { PermissionMessage } from '../components/RoleGuard';
 
 const UserManagement = () => {
     const { t } = useTranslation();
     const { isAdmin } = useAuth();
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const users = useDataStore('users');
+    const loading = useDataStore('loading');
+
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [editingUser, setEditingUser] = useState(null);
     const [showModal, setShowModal] = useState(false);
 
-    // Fetch all users
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            let query = supabase
-                .from('user_profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (roleFilter !== 'all') {
-                query = query.eq('role', roleFilter);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            setUsers(data || []);
-        } catch (err) {
-            console.error('Error fetching users:', err);
-        } finally {
-            setLoading(false);
-        }
+    // Manual refresh
+    const handleRefresh = async () => {
+        await dataService.fetchUsers(roleFilter);
     };
 
-    useEffect(() => {
-        fetchUsers();
-    }, [roleFilter]);
-
     // Filter users by search term
-    const filteredUsers = users.filter(user =>
+    const filteredUsers = users?.filter(user =>
         user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.phone?.includes(searchTerm)
-    );
+    ).filter(user =>
+        roleFilter === 'all' || user.role === roleFilter
+    ) || [];
 
     // Update user role
     const updateUserRole = async (userId, newRole) => {
@@ -57,7 +40,8 @@ const UserManagement = () => {
                 .eq('id', userId);
 
             if (error) throw error;
-            fetchUsers();
+            // Refresh data
+            dataService.fetchUsers(roleFilter);
             setShowModal(false);
             setEditingUser(null);
         } catch (err) {
@@ -75,7 +59,8 @@ const UserManagement = () => {
                 .eq('id', userId);
 
             if (error) throw error;
-            fetchUsers();
+            // Refresh data
+            dataService.fetchUsers(roleFilter);
         } catch (err) {
             console.error('Error toggling status:', err);
         }
@@ -105,24 +90,24 @@ const UserManagement = () => {
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                        <p className="text-3xl font-bold text-gray-800">{users.length}</p>
+                        <p className="text-3xl font-bold text-gray-800">{users?.length || 0}</p>
                         <p className="text-sm text-gray-500">Total Users</p>
                     </div>
                     <div className="bg-red-50 rounded-xl p-4 shadow-sm border border-red-100">
                         <p className="text-3xl font-bold text-red-600">
-                            {users.filter(u => u.role === 'admin').length}
+                            {users?.filter(u => u.role === 'admin').length || 0}
                         </p>
                         <p className="text-sm text-red-600">{t('roles.admin')}s</p>
                     </div>
                     <div className="bg-purple-50 rounded-xl p-4 shadow-sm border border-purple-100">
                         <p className="text-3xl font-bold text-purple-600">
-                            {users.filter(u => u.role === 'supervisor').length}
+                            {users?.filter(u => u.role === 'supervisor').length || 0}
                         </p>
                         <p className="text-sm text-purple-600">{t('roles.supervisor')}s</p>
                     </div>
                     <div className="bg-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
                         <p className="text-3xl font-bold text-blue-600">
-                            {users.filter(u => u.role === 'surveyor').length}
+                            {users?.filter(u => u.role === 'surveyor').length || 0}
                         </p>
                         <p className="text-sm text-blue-600">{t('roles.surveyor')}s</p>
                     </div>
@@ -159,13 +144,14 @@ const UserManagement = () => {
 
                         {/* Refresh */}
                         <button
-                            onClick={fetchUsers}
+                            onClick={handleRefresh}
+                            disabled={loading}
                             className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors flex items-center gap-2"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            {t('common.refresh')}
+                            {loading ? 'Loading...' : t('common.refresh')}
                         </button>
                     </div>
                 </div>
@@ -176,7 +162,7 @@ const UserManagement = () => {
                         <div className="flex items-center justify-center py-20">
                             <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                         </div>
-                    ) : filteredUsers.length === 0 ? (
+                    ) : !filteredUsers || filteredUsers.length === 0 ? (
                         <div className="text-center py-20">
                             <p className="text-gray-500">{t('users.noUsers')}</p>
                         </div>
@@ -215,8 +201,8 @@ const UserManagement = () => {
                                                 <button
                                                     onClick={() => toggleUserStatus(user.id, user.is_active)}
                                                     className={`px-3 py-1 rounded-full text-xs font-semibold ${user.is_active
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : 'bg-gray-100 text-gray-500'
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-gray-100 text-gray-500'
                                                         }`}
                                                 >
                                                     {user.is_active ? t('users.active') : t('users.inactive')}
@@ -262,8 +248,8 @@ const UserManagement = () => {
                                                 key={role}
                                                 onClick={() => updateUserRole(editingUser.id, role)}
                                                 className={`py-3 rounded-xl font-medium transition-all ${editingUser.role === role
-                                                        ? 'bg-blue-600 text-white shadow-lg'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                    ? 'bg-blue-600 text-white shadow-lg'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                                     }`}
                                             >
                                                 {t(`roles.${role}`)}

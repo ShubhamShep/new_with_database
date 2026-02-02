@@ -139,6 +139,84 @@ export const dataService = {
         }
     },
 
+    // Fetch all zones with user details
+    async fetchZones(statusFilter = null) {
+        console.log('[DataService] Fetching zones...');
+        dataStore.set('loading', true);
+
+        try {
+            let query = supabase
+                .from('survey_zones')
+                .select(`
+                    *,
+                    assigned_user:user_profiles!survey_zones_assigned_to_fkey(id, full_name, email),
+                    supervisor:user_profiles!survey_zones_supervisor_id_fkey(id, full_name, email)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (statusFilter && statusFilter !== 'all') {
+                query = query.eq('status', statusFilter);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('[DataService] Zones fetch error:', error);
+                dataStore.set('loading', false);
+                return { success: false, error };
+            }
+
+            dataStore.setMultiple({
+                zones: data || [],
+                loading: false
+            });
+
+            console.log(`[DataService] Loaded ${data?.length || 0} zones`);
+            return { success: true, data };
+        } catch (err) {
+            console.error('[DataService] Zones fetch exception:', err);
+            dataStore.set('loading', false);
+            return { success: false, error: err };
+        }
+    },
+
+    // Fetch all users
+    async fetchUsers(roleFilter = null) {
+        console.log('[DataService] Fetching users...');
+        dataStore.set('loading', true);
+
+        try {
+            let query = supabase
+                .from('user_profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (roleFilter && roleFilter !== 'all') {
+                query = query.eq('role', roleFilter);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('[DataService] Users fetch error:', error);
+                dataStore.set('loading', false);
+                return { success: false, error };
+            }
+
+            dataStore.setMultiple({
+                users: data || [],
+                loading: false
+            });
+
+            console.log(`[DataService] Loaded ${data?.length || 0} users`);
+            return { success: true, data };
+        } catch (err) {
+            console.error('[DataService] Users fetch exception:', err);
+            dataStore.set('loading', false);
+            return { success: false, error: err };
+        }
+    },
+
     // Fetch all data at once
     async fetchAll(userId) {
         console.log('[DataService] Fetching ALL data...');
@@ -147,7 +225,9 @@ export const dataService = {
             this.fetchSurveys(),
             this.fetchStats(),
             userId ? this.fetchAssignments(userId) : Promise.resolve({ success: true }),
-            this.fetchBuildings()
+            this.fetchBuildings(),
+            this.fetchZones(),
+            this.fetchUsers()
         ]);
 
         const success = results.every(r => r.status === 'fulfilled' && r.value.success);

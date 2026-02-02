@@ -8,6 +8,8 @@ class SimpleDataStore {
             stats: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 },
             assignments: [],
             buildings: [],
+            zones: [],
+            users: [],
             loading: false,
             lastUpdate: null
         };
@@ -53,6 +55,8 @@ class SimpleDataStore {
             stats: { total: 0, today: 0, thisWeek: 0, thisMonth: 0 },
             assignments: [],
             buildings: [],
+            zones: [],
+            users: [],
             loading: false,
             lastUpdate: null
         };

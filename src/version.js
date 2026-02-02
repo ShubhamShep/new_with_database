@@ -1,1 +1,1 @@
-export const APP_VERSION = 'v3.0.2-POLISHED';
+export const APP_VERSION = 'v3.1.0-MANAGEMENT';
