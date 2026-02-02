@@ -1,297 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { persistentStorage } from '../utils/persistentStorage';
+import { useDataStore } from '../hooks/useDataStore';
+import { dataService } from '../utils/dataService';
 
 const MyAssignments = () => {
-    const { t } = useTranslation();
     const { user } = useAuth();
     const navigate = useNavigate();
+    const assignments = useDataStore('assignments');
+    const surveys = useDataStore('surveys');
+    const loading = useDataStore('loading');
 
-    // Initialize from localStorage
-    const [assignments, setAssignments] = useState(() => {
-        return persistentStorage.get('my_assignments') || [];
-    });
-    const [mySurveys, setMySurveys] = useState(() => {
-        return persistentStorage.get('my_surveys') || [];
-    });
-    const [loading, setLoading] = useState(false);
-
-    // Fetch assigned zones with timeout
-    // Fetch assigned zones - simplified
-    const fetchAssignments = async () => {
-        console.log('[MyAssignments] fetchAssignments starting...');
-        if (!user) {
-            console.log('[MyAssignments] No user, skipping fetch');
-            setLoading(false);
-            return;
-        }
-
-        console.log('[MyAssignments] Fetching data...');
-        setLoading(true);
-
-        try {
-            // Get zones
-            const { data: zones, error: zonesError } = await Promise.race([
-                supabase.from('survey_zones').select('*').eq('assigned_to', user.id).order('created_at', { ascending: false }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
-            ]);
-
-            if (zones) {
-                setAssignments(zones);
-                persistentStorage.set('my_assignments', zones);
-                console.log('[MyAssignments] Assignments saved');
-            }
-
-            // Get surveys
-            const { data: surveys, error: surveysError } = await Promise.race([
-                supabase.from('surveys').select('id, created_at').order('created_at', { ascending: false }).limit(50),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
-            ]);
-
-            if (surveys) {
-                setMySurveys(surveys);
-                persistentStorage.set('my_surveys', surveys);
-                console.log('[MyAssignments] Surveys saved');
-            }
-        } catch (err) {
-            console.error('[MyAssignments] Error:', err);
-            // Keep existing data from localStorage
-        } finally {
-            setLoading(false);
+    // Manual refresh
+    const handleRefresh = async () => {
+        if (user) {
+            await dataService.fetchAssignments(user.id);
         }
     };
-
-    useEffect(() => {
-        // Only fetch if no fresh data
-        if (!persistentStorage.isFresh('my_assignments', 5 * 60 * 1000)) {
-            fetchAssignments();
-        } else {
-            console.log('[MyAssignments] Using cached data');
-        }
-        // Removed visibility change handler - was causing issues
-    }, [user]);
-
-    const getPriorityBadge = (priority) => {
-        const colors = {
-            urgent: 'bg-red-100 text-red-700 border-red-200',
-            high: 'bg-orange-100 text-orange-700 border-orange-200',
-            medium: 'bg-blue-100 text-blue-700 border-blue-200',
-            low: 'bg-gray-100 text-gray-600 border-gray-200'
-        };
-        return colors[priority] || colors.medium;
-    };
-
-    const getStatusBadge = (status) => {
-        const colors = {
-            completed: 'bg-green-100 text-green-700',
-            in_progress: 'bg-blue-100 text-blue-700',
-            on_hold: 'bg-yellow-100 text-yellow-700',
-            pending: 'bg-gray-100 text-gray-600'
-        };
-        return colors[status] || colors.pending;
-    };
-
-    // Calculate total progress
-    const totalTarget = assignments.reduce((sum, z) => sum + (z.target_count || 0), 0);
-    const totalCompleted = assignments.reduce((sum, z) => sum + (z.completed_count || 0), 0);
-    const todaysSurveys = mySurveys.filter(s => {
-        const today = new Date().toDateString();
-        return new Date(s.created_at).toDateString() === today;
-    }).length;
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-gray-500">{t('common.loading')}</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
-        <div className="p-6 max-w-6xl mx-auto">
+        <div className="p-4 md:p-6 max-w-7xl mx-auto">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <span className="text-3xl">📋</span>
-                    {t('assignments.title')}
-                </h1>
-                <p className="text-gray-500 mt-1">
-                    {profile?.full_name && `Welcome, ${profile.full_name}`}
-                </p>
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900">My Assignments</h1>
+                        <p className="text-gray-600 mt-1">Your assigned survey zones</p>
+                    </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                        <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {loading ? 'Loading...' : 'Refresh'}
+                    </button>
+                </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg shadow-blue-200">
-                    <p className="text-4xl font-bold">{assignments.length}</p>
-                    <p className="text-blue-100 text-sm">{t('assignments.assignedZones')}</p>
-                </div>
-                <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg shadow-green-200">
-                    <p className="text-4xl font-bold">{mySurveys.length}</p>
-                    <p className="text-green-100 text-sm">{t('assignments.surveysCompleted')}</p>
-                </div>
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white shadow-lg shadow-purple-200">
-                    <p className="text-4xl font-bold">{todaysSurveys}</p>
-                    <p className="text-purple-100 text-sm">{t('dashboard.todaysSurveys')}</p>
-                </div>
-                <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl p-4 text-white shadow-lg shadow-orange-200">
-                    <p className="text-4xl font-bold">{Math.max(0, totalTarget - totalCompleted)}</p>
-                    <p className="text-orange-100 text-sm">{t('assignments.targetRemaining')}</p>
-                </div>
-            </div>
-
-            {/* Overall Progress */}
-            {totalTarget > 0 && (
-                <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6">
-                    <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-gray-800">{t('assignments.progress')}</h3>
-                        <span className="text-sm text-gray-500">
-                            {totalCompleted} / {totalTarget} ({Math.round((totalCompleted / totalTarget) * 100)}%)
-                        </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-4">
-                        <div
-                            className="h-4 rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all"
-                            style={{ width: `${Math.min(100, (totalCompleted / totalTarget) * 100)}%` }}
-                        ></div>
-                    </div>
-                </div>
-            )}
-
-            {/* Assigned Zones */}
-            {assignments.length === 0 ? (
-                <div className="bg-white rounded-xl p-12 text-center shadow-sm border border-gray-100">
-                    <div className="text-6xl mb-4">📭</div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">{t('assignments.noAssignments')}</h3>
-                    <p className="text-gray-500">Contact your supervisor or admin to get assigned to a zone.</p>
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    <h2 className="text-lg font-semibold text-gray-800">{t('assignments.assignedZones')}</h2>
-
-                    {assignments.map(zone => {
-                        const progress = zone.target_count > 0
-                            ? Math.round((zone.completed_count / zone.target_count) * 100)
-                            : 0;
-                        const isOverdue = zone.due_date && new Date(zone.due_date) < new Date();
-
-                        return (
-                            <div
-                                key={zone.id}
-                                className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-                            >
-                                {/* Color bar */}
-                                <div className="h-1.5" style={{ backgroundColor: zone.color || '#3B82F6' }}></div>
-
-                                <div className="p-5">
-                                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                                        {/* Zone Info */}
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <h3 className="text-lg font-bold text-gray-800">{zone.name}</h3>
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusBadge(zone.status)}`}>
-                                                    {t(`zones.${zone.status?.replace('_', '') || 'pending'}`)}
-                                                </span>
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getPriorityBadge(zone.priority)}`}>
-                                                    {t(`zones.${zone.priority}`)}
-                                                </span>
-                                            </div>
-
-                                            {zone.description && (
-                                                <p className="text-gray-500 text-sm mb-3">{zone.description}</p>
-                                            )}
-
-                                            {/* Progress */}
-                                            <div className="mb-3">
-                                                <div className="flex justify-between text-sm mb-1">
-                                                    <span className="text-gray-500">{t('zones.progress')}</span>
-                                                    <span className="font-medium text-gray-700">
-                                                        {zone.completed_count || 0} / {zone.target_count || 0}
-                                                    </span>
-                                                </div>
-                                                <div className="w-full bg-gray-100 rounded-full h-2.5">
-                                                    <div
-                                                        className={`h-2.5 rounded-full transition-all ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
-                                                        style={{ width: `${Math.min(100, progress)}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
-
-                                            {/* Meta info */}
-                                            <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                                                {zone.supervisor && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span>👤</span>
-                                                        <span>Supervisor: {zone.supervisor.full_name || zone.supervisor.email}</span>
-                                                    </div>
-                                                )}
-                                                {zone.due_date && (
-                                                    <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-500 font-medium' : ''}`}>
-                                                        <span>📅</span>
-                                                        <span>{t('assignments.deadline')}: {new Date(zone.due_date).toLocaleDateString()}</span>
-                                                        {isOverdue && <span className="text-red-500">⚠️ Overdue</span>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Action Button */}
-                                        <div className="flex gap-2">
-                                            <Link
-                                                to="/survey"
-                                                className="px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-200 flex items-center gap-2"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                                {t('assignments.startSurvey')}
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Recent Surveys */}
-            {mySurveys.length > 0 && (
-                <div className="mt-8">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Surveys</h2>
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="divide-y divide-gray-100">
-                            {mySurveys.slice(0, 5).map((survey, idx) => (
-                                <div key={survey.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
-                                    <div className="flex items-center gap-3">
-                                        <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-semibold text-sm">
-                                            {idx + 1}
-                                        </span>
-                                        <div>
-                                            <p className="font-medium text-gray-800">Survey #{survey.id.slice(0, 8)}</p>
-                                            <p className="text-xs text-gray-400">
-                                                {new Date(survey.created_at).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Link
-                                        to={`/survey/${survey.id}`}
-                                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                                    >
-                                        {t('common.view')} →
-                                    </Link>
-                                </div>
-                            ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-blue-100 text-sm">Assigned Zones</p>
+                            <p className="text-4xl font-bold mt-2">{assignments?.length || 0}</p>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-green-100 text-sm">My Surveys</p>
+                            <p className="text-4xl font-bold mt-2">{surveys?.length || 0}</p>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-purple-100 text-sm">Completion Rate</p>
+                            <p className="text-4xl font-bold mt-2">
+                                {assignments?.length > 0
+                                    ? Math.round((surveys?.length / (assignments.reduce((sum, a) => sum + (a.target_count || 0), 0) || 1)) * 100)
+                                    : 0}%
+                            </p>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Assignments List */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900">Zone Assignments</h2>
+                </div>
+
+                {loading ? (
+                    <div className="p-8 text-center text-gray-500">
+                        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto"></div>
+                        <p className="mt-2">Loading assignments...</p>
+                    </div>
+                ) : !assignments || assignments.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                        <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-lg font-medium">No assignments yet</p>
+                        <p className="text-sm mt-1">Your supervisor will assign zones to you</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-200">
+                        {assignments.map(assignment => (
+                            <div key={assignment.id} className="p-6 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <h3 className="text-lg font-semibold text-gray-900">
+                                                {assignment.name || 'Unnamed Zone'}
+                                            </h3>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${assignment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                    assignment.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                                        'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {assignment.status || 'pending'}
+                                            </span>
+                                            {assignment.priority && (
+                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${assignment.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                                                        assignment.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                                                            'bg-gray-100 text-gray-600'
+                                                    }`}>
+                                                    {assignment.priority}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {assignment.description && (
+                                            <p className="text-gray-600 text-sm mb-3">{assignment.description}</p>
+                                        )}
+
+                                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                            <div className="flex items-center gap-1">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
+                                                <span>Target: {assignment.target_count || 0} buildings</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span>Completed: {assignment.completed_count || 0}</span>
+                                            </div>
+                                            {assignment.due_date && (
+                                                <div className="flex items-center gap-1">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span>Due: {new Date(assignment.due_date).toLocaleDateString()}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {assignment.notes && (
+                                            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <p className="text-sm text-yellow-800">
+                                                    <strong>Note:</strong> {assignment.notes}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={() => navigate('/survey', { state: { zoneId: assignment.id } })}
+                                        className="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Start Survey
+                                    </button>
+                                </div>
+
+                                {/* Progress Bar */}
+                                {assignment.target_count > 0 && (
+                                    <div className="mt-4">
+                                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                                            <span>Progress</span>
+                                            <span>{Math.round(((assignment.completed_count || 0) / assignment.target_count) * 100)}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="bg-blue-600 h-2 rounded-full transition-all"
+                                                style={{ width: `${Math.min(((assignment.completed_count || 0) / assignment.target_count) * 100, 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
