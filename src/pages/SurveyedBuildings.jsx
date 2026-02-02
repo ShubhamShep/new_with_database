@@ -48,11 +48,18 @@ const SurveyedBuildings = () => {
 
         try {
             console.log('[SurveyedBuildings] Making Supabase query...');
-            const { data, error } = await supabase
-                .from('surveys')
-                .select('*')
-                .not('geometry', 'is', null)
-                .order('created_at', { ascending: false });
+
+            // Wrap query with timeout
+            const { data, error } = await Promise.race([
+                supabase
+                    .from('surveys')
+                    .select('*')
+                    .not('geometry', 'is', null)
+                    .order('created_at', { ascending: false }),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Query timeout after 15s')), 15000)
+                )
+            ]);
 
             console.log('[SurveyedBuildings] Query complete:', {
                 hasData: !!data,
@@ -69,9 +76,11 @@ const SurveyedBuildings = () => {
                     hint: error.hint,
                     code: error.code
                 });
+                // DO NOT clear existing data on error
+                return;
             }
 
-            if (!error && data) {
+            if (data) {
                 console.log('[SurveyedBuildings] Setting buildings data, count:', data.length);
                 setBuildings(data);
 
@@ -96,6 +105,7 @@ const SurveyedBuildings = () => {
         } catch (err) {
             console.error('[SurveyedBuildings] Exception in fetchBuildings:', err);
             console.error('[SurveyedBuildings] Exception stack:', err.stack);
+            // DO NOT clear existing data on exception
         } finally {
             console.log('[SurveyedBuildings] Setting loading to false');
             setLoading(false);

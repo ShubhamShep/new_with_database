@@ -14,5 +14,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         detectSessionInUrl: true,
         storage: window.localStorage,
         storageKey: 'supabase-auth-token',
+    },
+    global: {
+        headers: {
+            'x-client-info': 'property-tax-survey-app'
+        }
     }
 });
+
+// Helper to add timeout to any promise
+export const withTimeout = (promise, timeoutMs = 15000) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+        )
+    ]);
+};
