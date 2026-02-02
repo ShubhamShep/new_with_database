@@ -70,6 +70,10 @@ export const AuthProvider = ({ children }) => {
             setUser(session?.user ?? null);
             if (session?.user) {
                 fetchProfile(session.user.id);
+                // Load all data once after auth
+                import('../utils/dataService').then(({ dataService }) => {
+                    dataService.fetchAll(session.user.id);
+                });
             }
             setLoading(false);
         });
@@ -80,8 +84,16 @@ export const AuthProvider = ({ children }) => {
                 setUser(session?.user ?? null);
                 if (session?.user) {
                     await fetchProfile(session.user.id);
+                    // Load data on sign in
+                    import('../utils/dataService').then(({ dataService }) => {
+                        dataService.fetchAll(session.user.id);
+                    });
                 } else {
                     setProfile(null);
+                    // Clear data on sign out
+                    import('../utils/dataStore').then(({ dataStore }) => {
+                        dataStore.clear();
+                    });
                 }
             }
         );
