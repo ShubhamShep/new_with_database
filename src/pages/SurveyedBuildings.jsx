@@ -1,14 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import { useDataStore } from '../hooks/useDataStore';
 import { dataService } from '../utils/dataService';
 import 'leaflet/dist/leaflet.css';
 
 const SurveyedBuildings = () => {
+    const location = useLocation();
     const buildings = useDataStore('buildings');
     const loading = useDataStore('loading');
     const [stats, setStats] = useState({ total: 0, residential: 0, commercial: 0, other: 0 });
     const [selectedBuilding, setSelectedBuilding] = useState(null);
+    const [highlightedSurveyId, setHighlightedSurveyId] = useState(null);
+
+    // Check if survey should be highlighted (from navigation state)
+    useEffect(() => {
+        if (location.state?.highlightSurveyId) {
+            setHighlightedSurveyId(location.state.highlightSurveyId);
+            // Clear the state after using it
+            window.history.replaceState({}, document.title);
+        }
+    }, [location]);
 
     // Calculate stats when buildings change
     useEffect(() => {
@@ -117,9 +129,11 @@ const SurveyedBuildings = () => {
                                     ? JSON.parse(building.geometry)
                                     : building.geometry;
 
-                                const color = building.property_type?.toLowerCase().includes('residential') ? '#10b981' :
-                                    building.property_type?.toLowerCase().includes('commercial') ? '#8b5cf6' :
-                                        '#f59e0b';
+                                const isHighlighted = building.id === highlightedSurveyId;
+                                const color = isHighlighted ? '#ef4444' : // Red for highlighted
+                                    building.property_type?.toLowerCase().includes('residential') ? '#10b981' :
+                                        building.property_type?.toLowerCase().includes('commercial') ? '#8b5cf6' :
+                                            '#f59e0b';
 
                                 return (
                                     <GeoJSON
@@ -127,21 +141,44 @@ const SurveyedBuildings = () => {
                                         data={geojson}
                                         style={{
                                             color: color,
-                                            weight: 2,
-                                            opacity: 0.8,
+                                            weight: isHighlighted ? 4 : 2,
+                                            opacity: isHighlighted ? 1 : 0.8,
                                             fillColor: color,
-                                            fillOpacity: 0.3
+                                            fillOpacity: isHighlighted ? 0.6 : 0.3
                                         }}
                                         onEachFeature={(feature, layer) => {
-                                            layer.on('click', () => setSelectedBuilding(building));
-                                            layer.bindPopup(`
+                                            layer.on('click', () => {
+                                                setSelectedBuilding(building);
+                                                setHighlightedSurveyId(null); // Clear highlight after click
+                                            });
+
+                                            const popupContent = `
                                                 <div class="p-2">
+                                                    ${isHighlighted ? '<p class="text-red-600 font-bold text-xs mb-1">📍 SELECTED FROM DASHBOARD</p>' : ''}
                                                     <p class="font-bold">${building.building_id || 'Unknown'}</p>
                                                     <p class="text-sm">Owner: ${building.owner_name || 'N/A'}</p>
                                                     <p class="text-sm">Type: ${building.property_type || 'N/A'}</p>
-                                                    <p class="text-sm">Area: ${building.plot_area || 'N/A'} sq.m</p>
+                                                    <p class="text-sm">Area: ${building.plot_area || building.total_carpet_area || 'N/A'} sq.m</p>
                                                 </div>
-                                            `);
+                                            `;
+
+                                            layer.bindPopup(popupContent);
+
+                                            // Auto-open popup for highlighted building
+                                            if (isHighlighted) {
+                                                setTimeout(() => {
+                                                    layer.openPopup();
+                                                    // Zoom to this building
+                                                    const bounds = layer.getBounds();
+                                                    if (bounds.isValid()) {
+                                                        layer._map?.fitBounds(bounds, {
+                                                            padding: [50, 50],
+                                                            maxZoom: 18
+                                                        });
+                                                    }
+                                                    setSelectedBuilding(building);
+                                                }, 500);
+                                            }
                                         }}
                                     />
                                 );
