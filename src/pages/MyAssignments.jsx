@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { persistentStorage } from '../utils/persistentStorage';
 
 const MyAssignments = () => {
     const { t } = useTranslation();
-    const { user, profile } = useAuth();
-    const [assignments, setAssignments] = useState([]);
-    const [mySurveys, setMySurveys] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    // Initialize from localStorage
+    const [assignments, setAssignments] = useState(() => {
+        return persistentStorage.get('my_assignments') || [];
+    });
+    const [mySurveys, setMySurveys] = useState(() => {
+        return persistentStorage.get('my_surveys') || [];
+    });
+    const [loading, setLoading] = useState(false);
 
     // Fetch assigned zones with timeout
     // Fetch assigned zones - simplified
@@ -21,76 +29,48 @@ const MyAssignments = () => {
             return;
         }
 
-        console.log('[MyAssignments] User ID:', user.id);
+        console.log('[MyAssignments] Fetching data...');
         setLoading(true);
 
         try {
-            // Get zones assigned to current user
-            console.log('[MyAssignments] Fetching zones...');
-            const { data: zones, error: zonesError } = await supabase
-                .from('survey_zones')
-                .select('*')
-                .eq('assigned_to', user.id)
-                .order('created_at', { ascending: false });
+            // Get zones
+            const { data: zones, error: zonesError } = await Promise.race([
+                supabase.from('survey_zones').select('*').eq('assigned_to', user.id).order('created_at', { ascending: false }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+            ]);
 
-            console.log('[MyAssignments] Zones query result:', {
-                hasZones: !!zones,
-                zonesCount: zones?.length || 0,
-                hasError: !!zonesError,
-                error: zonesError
-            });
-
-            if (zonesError) {
-                console.error('[MyAssignments] Zones error:', zonesError);
-                console.error('[MyAssignments] Zones error details:', {
-                    message: zonesError.message,
-                    details: zonesError.details,
-                    hint: zonesError.hint,
-                    code: zonesError.code
-                });
-            } else if (zones) {
+            if (zones) {
                 setAssignments(zones);
-                console.log('[MyAssignments] Assignments set, count:', zones.length);
+                persistentStorage.set('my_assignments', zones);
+                console.log('[MyAssignments] Assignments saved');
             }
 
-            // Get user's survey count
-            console.log('[MyAssignments] Fetching surveys...');
-            const { data: surveys, error: surveysError } = await supabase
-                .from('surveys')
-                .select('id, created_at')
-                .order('created_at', { ascending: false })
-                .limit(50);
+            // Get surveys
+            const { data: surveys, error: surveysError } = await Promise.race([
+                supabase.from('surveys').select('id, created_at').order('created_at', { ascending: false }).limit(50),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+            ]);
 
-            console.log('[MyAssignments] Surveys query result:', {
-                hasSurveys: !!surveys,
-                surveysCount: surveys?.length || 0,
-                hasError: !!surveysError,
-                error: surveysError
-            });
-
-            if (surveysError) {
-                console.error('[MyAssignments] Surveys error:', surveysError);
-                console.error('[MyAssignments] Surveys error details:', {
-                    message: surveysError.message,
-                    details: surveysError.details,
-                    hint: surveysError.hint,
-                    code: surveysError.code
-                });
-            } else if (surveys) {
+            if (surveys) {
                 setMySurveys(surveys);
-                console.log('[MyAssignments] Surveys set, count:', surveys.length);
+                persistentStorage.set('my_surveys', surveys);
+                console.log('[MyAssignments] Surveys saved');
             }
         } catch (err) {
-            console.error('[MyAssignments] Error fetching assignments:', err);
-            console.error('[MyAssignments] Exception stack:', err.stack);
+            console.error('[MyAssignments] Error:', err);
+            // Keep existing data from localStorage
         } finally {
-            console.log('[MyAssignments] Setting loading to false');
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchAssignments();
+        // Only fetch if no fresh data
+        if (!persistentStorage.isFresh('my_assignments', 5 * 60 * 1000)) {
+            fetchAssignments();
+        } else {
+            console.log('[MyAssignments] Using cached data');
+        }
         // Removed visibility change handler - was causing issues
     }, [user]);
 

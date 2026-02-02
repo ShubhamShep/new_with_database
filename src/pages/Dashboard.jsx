@@ -5,27 +5,51 @@ import { generateSurveyPDF } from '../utils/generatePDF';
 import { useToast } from '../components/Toast';
 import SyncIndicator from '../components/SyncIndicator';
 import { exportToExcel, exportToCSV } from '../utils/exportToExcel';
+import { persistentStorage } from '../utils/persistentStorage';
 
 
 const Dashboard = () => {
     const navigate = useNavigate();
     const toast = useToast();
-    const [stats, setStats] = useState({
-        total: 0,
-        today: 0,
-        thisWeek: 0,
-        thisMonth: 0,
+
+    // Initialize from localStorage immediately
+    const [stats, setStats] = useState(() => {
+        return persistentStorage.get('dashboard_stats') || {
+            total: 0,
+            today: 0,
+            thisWeek: 0,
+            thisMonth: 0,
+        };
     });
-    const [recentSurveys, setRecentSurveys] = useState([]);
-    const [loading, setLoading] = useState(true);
+
+    const [recentSurveys, setRecentSurveys] = useState(() => {
+        return persistentStorage.get('dashboard_surveys') || [];
+    });
+
+    const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [lastFetch, setLastFetch] = useState(() => {
+        return persistentStorage.get('dashboard_last_fetch') || null;
+    });
 
     useEffect(() => {
-        fetchStats();
-        fetchRecentSurveys();
-        // Removed visibility change handler - was causing issues
+        // Only fetch if we don't have fresh data
+        if (!persistentStorage.isFresh('dashboard_stats', 5 * 60 * 1000)) {
+            console.log('[Dashboard] No fresh data, fetching...');
+            fetchAllData();
+        } else {
+            console.log('[Dashboard] Using cached data');
+        }
     }, []);
+
+    const fetchAllData = async () => {
+        setLoading(true);
+        await Promise.all([fetchStats(), fetchRecentSurveys()]);
+        setLoading(false);
+        setLastFetch(new Date().toLocaleString());
+        persistentStorage.set('dashboard_last_fetch', new Date().toLocaleString());
+    };
 
     const fetchStats = async () => {
         console.log('[Dashboard] fetchStats starting...');
@@ -36,59 +60,52 @@ const Dashboard = () => {
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
             console.log('[Dashboard] Making stats query...');
-            const { data, error } = await supabase
-                .from('surveys')
-                .select('created_at, status');
+            const { data, error } = await Promise.race([
+                supabase.from('surveys').select('created_at, status'),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+            ]);
 
             console.log('[Dashboard] Stats query result:', {
                 hasData: !!data,
                 dataCount: data?.length || 0,
-                hasError: !!error,
-                error: error
+                hasError: !!error
             });
 
             if (data) {
-                setStats({
+                const newStats = {
                     total: data.length,
                     today: data.filter(s => new Date(s.created_at) >= new Date(startOfDay)).length,
                     thisWeek: data.filter(s => new Date(s.created_at) >= new Date(startOfWeek)).length,
                     thisMonth: data.filter(s => new Date(s.created_at) >= new Date(startOfMonth)).length,
-                });
-                console.log('[Dashboard] Stats set successfully');
-            } else if (error) {
-                console.error('[Dashboard] Error fetching stats:', error);
-                console.error('[Dashboard] Error details:', {
-                    message: error.message,
-                    details: error.details,
-                    hint: error.hint,
-                    code: error.code
-                });
-                // Do NOT clear stats on error, keep previous data if available
+                };
+                setStats(newStats);
+                persistentStorage.set('dashboard_stats', newStats);
+                console.log('[Dashboard] Stats saved to storage');
             }
         } catch (err) {
-            console.error('[Dashboard] fetchStats exception:', err);
-            console.error('[Dashboard] Exception stack:', err.stack);
-        } finally {
-            setLoading(false);
+            console.error('[Dashboard] fetchStats error:', err);
+            // Keep existing data from localStorage
         }
     };
 
     const fetchRecentSurveys = async () => {
         try {
-            const { data, error } = await supabase
-                .from('surveys')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
+            const { data, error } = await Promise.race([
+                supabase.from('surveys').select('*').order('created_at', { ascending: false }).limit(20),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+            ]);
 
             if (error) {
-                console.error('Error fetching recent surveys:', error);
-                // Keep existing data on error
+                console.error('[Dashboard] Error fetching recent surveys:', error);
+                // Keep existing data from localStorage
             } else if (data) {
                 setRecentSurveys(data);
+                persistentStorage.set('dashboard_surveys', data);
+                console.log('[Dashboard] Recent surveys saved to storage');
             }
         } catch (err) {
-            console.error('fetchRecentSurveys error:', err);
+            console.error('[Dashboard] fetchRecentSurveys error:', err);
+            // Keep existing data from localStorage
         }
     };
 
@@ -172,9 +189,18 @@ const Dashboard = () => {
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     {/* Export Buttons */}
                     <button
+                        onClick={fetchAllData}
+                        disabled={loading}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+                    >
+                        <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {loading ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                    <button
                         onClick={handleExportExcel}
-                        className="flex-1 sm:flex-none px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow transition-all hover:scale-105 flex items-center justify-center gap-2 text-sm"
-                        title="Export all visible surveys to Excel"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-sm flex items-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -183,11 +209,10 @@ const Dashboard = () => {
                     </button>
                     <button
                         onClick={handleExportCSV}
-                        className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow transition-all hover:scale-105 flex items-center justify-center gap-2 text-sm"
-                        title="Export all visible surveys to CSV"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm flex items-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         CSV
                     </button>
