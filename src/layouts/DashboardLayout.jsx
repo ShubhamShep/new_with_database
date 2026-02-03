@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { dataStore } from '../utils/dataStore';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { APP_VERSION } from '../version';
 
@@ -11,11 +12,38 @@ const DashboardLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const { profile, isAdmin, isSupervisor, canManageZones, signOut } = useAuth();
+    const [loggingOut, setLoggingOut] = useState(false);
+    const { profile, isAdmin, isSupervisor, canManageZones } = useAuth();
 
     const handleLogout = async () => {
-        await signOut();
-        navigate('/login');
+        try {
+            setLoggingOut(true);
+            console.log('Logout initiated...');
+
+            // Clear data store first
+            dataStore.clear();
+
+            // Clear local storage auth data
+            localStorage.removeItem('supabase-auth-token');
+
+            // Call Supabase signOut directly (more reliable)
+            const { error } = await supabase.auth.signOut();
+
+            if (error) {
+                console.error('Supabase signOut error:', error);
+                alert('Logout failed. Please try again.');
+                setLoggingOut(false);
+                return;
+            }
+
+            console.log('Logout successful');
+            // Navigate to login page
+            navigate('/login', { replace: true });
+        } catch (error) {
+            console.error('Logout error:', error);
+            alert('Logout failed: ' + error.message);
+            setLoggingOut(false);
+        }
     };
 
     const closeSidebar = () => {
@@ -108,9 +136,23 @@ const DashboardLayout = () => {
                         )}
                         <button
                             onClick={handleLogout}
-                            className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors text-base"
+                            disabled={loggingOut}
+                            className={`w-full py-3 px-4 rounded-lg font-medium transition-colors text-base flex items-center justify-center gap-2 ${loggingOut
+                                    ? 'bg-gray-500 cursor-not-allowed'
+                                    : 'bg-red-600 hover:bg-red-700'
+                                }`}
                         >
-                            {t('auth.logout')}
+                            {loggingOut ? (
+                                <>
+                                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Logging out...
+                                </>
+                            ) : (
+                                t('auth.logout')
+                            )}
                         </button>
 
                         {/* Version Display */}
