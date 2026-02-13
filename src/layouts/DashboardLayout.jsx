@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '../supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { dataStore } from '../utils/dataStore';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { APP_VERSION } from '../version';
 
@@ -13,35 +11,19 @@ const DashboardLayout = () => {
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
-    const { profile, isAdmin, isSupervisor, canManageZones } = useAuth();
+    const { profile, isAdmin, isSupervisor, canManageZones, signOut } = useAuth();
 
     const handleLogout = async () => {
         try {
             setLoggingOut(true);
-            console.log('Logout initiated...');
-
-            // Clear data store first
-            dataStore.clear();
-
-            // Clear local storage auth data
-            localStorage.removeItem('supabase-auth-token');
-
-            // Call Supabase signOut directly (more reliable)
-            const { error } = await supabase.auth.signOut();
-
-            if (error) {
-                console.error('Supabase signOut error:', error);
-                alert('Logout failed. Please try again.');
-                setLoggingOut(false);
-                return;
-            }
-
-            console.log('Logout successful');
-            // Navigate to login page
+            await signOut();
+            // AuthContext clears state → ProtectedRoute sees isAuthenticated=false → redirects to /login
             navigate('/login', { replace: true });
         } catch (error) {
             console.error('Logout error:', error);
-            alert('Logout failed: ' + error.message);
+            // Even on error, navigate to login (state was force-cleared in AuthContext)
+            navigate('/login', { replace: true });
+        } finally {
             setLoggingOut(false);
         }
     };
@@ -52,7 +34,7 @@ const DashboardLayout = () => {
 
     return (
         <div className="flex h-screen bg-gray-50">
-            {/* Mobile Overlay - Higher z-index */}
+            {/* Mobile Overlay */}
             {sidebarOpen && (
                 <div
                     className="fixed inset-0 bg-black bg-opacity-50 z-[9998] md:hidden"
@@ -60,7 +42,7 @@ const DashboardLayout = () => {
                 />
             )}
 
-            {/* Sidebar - Higher z-index */}
+            {/* Sidebar */}
             <aside className={`fixed md:static inset-y-0 left-0 z-[9999] w-64 bg-gradient-to-b from-slate-900 to-slate-800 text-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                 <div className="flex flex-col h-full">
                     {/* Logo with Close Button on Mobile */}
@@ -69,7 +51,6 @@ const DashboardLayout = () => {
                             <h1 className="text-xl font-bold">INDICES</h1>
                             <p className="text-xs text-slate-400 mt-0.5">Geospatial Survey System</p>
                         </div>
-                        {/* Close button for mobile */}
                         <button
                             className="md:hidden p-2 rounded-lg hover:bg-slate-700 transition-colors"
                             onClick={closeSidebar}
@@ -138,8 +119,8 @@ const DashboardLayout = () => {
                             onClick={handleLogout}
                             disabled={loggingOut}
                             className={`w-full py-3 px-4 rounded-lg font-medium transition-colors text-base flex items-center justify-center gap-2 ${loggingOut
-                                    ? 'bg-gray-500 cursor-not-allowed'
-                                    : 'bg-red-600 hover:bg-red-700'
+                                ? 'bg-gray-500 cursor-not-allowed'
+                                : 'bg-red-600 hover:bg-red-700'
                                 }`}
                         >
                             {loggingOut ? (
@@ -167,7 +148,6 @@ const DashboardLayout = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top Header */}
                 <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-                    {/* Hamburger Menu - Larger touch target */}
                     <button
                         className="md:hidden p-3 -ml-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
                         onClick={() => setSidebarOpen(true)}

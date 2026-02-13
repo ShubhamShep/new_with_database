@@ -1,62 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
 const Login = () => {
-    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [checkingSession, setCheckingSession] = useState(true);
+    const [error, setError] = useState('');
 
-    // Check if user is already logged in
-    useEffect(() => {
-        let mounted = true;
-
-        // Timeout to prevent infinite loading
-        const timeout = setTimeout(() => {
-            if (mounted) setCheckingSession(false);
-        }, 3000);
-
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (mounted) {
-                if (session) {
-                    navigate('/dashboard', { replace: true });
-                }
-                setCheckingSession(false);
-            }
-        }).catch(err => {
-            console.error('Session check failed:', err);
-            if (mounted) setCheckingSession(false);
-        });
-
-        // Listen for auth changes - this handles navigation after login
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log('Login page - Auth event:', event);
-            if (event === 'SIGNED_IN' && session) {
-                // Add small delay to ensure session is persisted
-                setTimeout(() => {
-                    navigate('/dashboard', { replace: true });
-                }, 100);
-            }
-        });
-
-        return () => {
-            mounted = false;
-            clearTimeout(timeout);
-            subscription.unsubscribe();
-        };
-    }, [navigate]);
+    // No auth listeners here — AuthContext + router handle redirect automatically
 
     const handleAuth = async (isSignUp) => {
         if (!email || !password) {
-            alert('Please enter email and password');
+            setError('Please enter email and password');
             return;
         }
 
         setLoading(true);
+        setError('');
+
         try {
-            const { data, error } = isSignUp
+            const { data, error: authError } = isSignUp
                 ? await supabase.auth.signUp({
                     email,
                     password,
@@ -66,29 +29,21 @@ const Login = () => {
                 })
                 : await supabase.auth.signInWithPassword({ email, password });
 
-            if (error) throw error;
+            if (authError) throw authError;
 
             if (isSignUp) {
+                setError('');
                 alert('Sign up successful! You can now log in.');
-                setLoading(false);
             }
-            // Don't navigate here - let onAuthStateChange handle it
-            // This ensures the session is fully established before navigating
-        } catch (error) {
-            console.error('Auth error:', error.message);
-            alert(error.message);
+            // For login: AuthContext detects SIGNED_IN → sets user → 
+            // PublicRoute sees isAuthenticated=true → redirects to /dashboard
+        } catch (err) {
+            console.error('Auth error:', err.message);
+            setError(err.message);
+        } finally {
             setLoading(false);
         }
     };
-
-    // Show loading while checking session
-    if (checkingSession) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
-                <div className="text-white text-xl">Loading...</div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
@@ -113,6 +68,13 @@ const Login = () => {
                 {/* Login Card */}
                 <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
                     <h2 className="text-xl font-semibold text-white text-center mb-6">Surveyor Login</h2>
+
+                    {/* Error message */}
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-200 text-sm text-center">
+                            {error}
+                        </div>
+                    )}
 
                     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuth(false); }}>
                         <div>

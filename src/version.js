@@ -1,1 +1,1 @@
-export const APP_VERSION = 'v3.2.2-LOGOUT';
+export const APP_VERSION = 'v3.3.0-AUTH-FIX';

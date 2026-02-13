@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
+import { dataStore } from '../utils/dataStore';
 
 const AuthContext = createContext(null);
 
@@ -15,10 +16,9 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     // Fetch user profile including role
-    const fetchProfile = async (userId) => {
+    const fetchProfile = useCallback(async (userId) => {
         try {
             const { data, error } = await supabase
                 .from('user_profiles')
@@ -27,10 +27,9 @@ export const AuthProvider = ({ children }) => {
                 .single();
 
             if (error) {
-                console.log('Profile fetch error (may be normal for new users):', error.code);
-                // Profile might not exist yet - set a default profile
+                console.log('Profile fetch error:', error.code);
                 if (error.code === 'PGRST116') {
-                    // Try to create profile
+                    // Profile doesn't exist — create one
                     const currentUser = (await supabase.auth.getUser()).data.user;
                     const { data: newProfile, error: createError } = await supabase
                         .from('user_profiles')
@@ -45,12 +44,10 @@ export const AuthProvider = ({ children }) => {
                     if (!createError && newProfile) {
                         setProfile(newProfile);
                     } else {
-                        // Even if creation fails, set a minimal profile so app works
                         setProfile({ id: userId, role: 'surveyor', email: currentUser?.email });
                     }
                     return;
                 }
-                // For other errors, set a minimal profile
                 setProfile({ id: userId, role: 'surveyor' });
                 return;
             }
@@ -58,19 +55,20 @@ export const AuthProvider = ({ children }) => {
             setProfile(data);
         } catch (err) {
             console.error('Error in fetchProfile:', err);
-            // Set minimal profile so app continues to work
             setProfile({ id: userId, role: 'surveyor' });
         }
-    };
+    }, []);
 
-    // Initialize auth state
+    // ─── SINGLE auth listener for the entire app ───
     useEffect(() => {
-        // Get initial session
+        let mounted = true;
+
+        // 1. Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
+            if (!mounted) return;
             if (session?.user) {
+                setUser(session.user);
                 fetchProfile(session.user.id);
-                // Load all data once after auth
                 import('../utils/dataService').then(({ dataService }) => {
                     dataService.fetchAll(session.user.id);
                 });
@@ -78,42 +76,49 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         });
 
-        // Listen for auth changes
+        // 2. Listen for changes (login, logout, token refresh)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, session) => {
-                setUser(session?.user ?? null);
-                if (session?.user) {
+            async (event, session) => {
+                if (!mounted) return;
+                console.log('Auth event:', event);
+
+                if (event === 'SIGNED_IN' && session?.user) {
+                    setUser(session.user);
                     await fetchProfile(session.user.id);
-                    // Load data on sign in
                     import('../utils/dataService').then(({ dataService }) => {
                         dataService.fetchAll(session.user.id);
                     });
-                } else {
+                } else if (event === 'SIGNED_OUT') {
+                    setUser(null);
                     setProfile(null);
-                    // Clear data on sign out
-                    import('../utils/dataStore').then(({ dataStore }) => {
-                        dataStore.clear();
-                    });
+                    dataStore.clear();
+                } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+                    setUser(session.user);
                 }
+
+                setLoading(false);
             }
         );
 
-        return () => subscription.unsubscribe();
-    }, []);
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
+    }, [fetchProfile]);
 
     // Role checking utilities
-    const isAdmin = () => profile?.role === 'admin';
-    const isSupervisor = () => profile?.role === 'supervisor';
-    const isSurveyor = () => profile?.role === 'surveyor';
-    const hasRole = (role) => profile?.role === role;
-    const hasAnyRole = (roles) => roles.includes(profile?.role);
+    const isAdmin = useCallback(() => profile?.role === 'admin', [profile]);
+    const isSupervisor = useCallback(() => profile?.role === 'supervisor', [profile]);
+    const isSurveyor = useCallback(() => profile?.role === 'surveyor', [profile]);
+    const hasRole = useCallback((role) => profile?.role === role, [profile]);
+    const hasAnyRole = useCallback((roles) => roles.includes(profile?.role), [profile]);
 
     // Permission checking
-    const canManageUsers = () => isAdmin();
-    const canManageZones = () => isAdmin() || isSupervisor();
-    const canViewAllSurveys = () => isAdmin() || isSupervisor();
-    const canApproveSurveys = () => isAdmin() || isSupervisor();
-    const canExportData = () => isAdmin() || isSupervisor();
+    const canManageUsers = useCallback(() => profile?.role === 'admin', [profile]);
+    const canManageZones = useCallback(() => ['admin', 'supervisor'].includes(profile?.role), [profile]);
+    const canViewAllSurveys = useCallback(() => ['admin', 'supervisor'].includes(profile?.role), [profile]);
+    const canApproveSurveys = useCallback(() => ['admin', 'supervisor'].includes(profile?.role), [profile]);
+    const canExportData = useCallback(() => ['admin', 'supervisor'].includes(profile?.role), [profile]);
 
     // Update profile
     const updateProfile = async (updates) => {
@@ -133,18 +138,31 @@ export const AuthProvider = ({ children }) => {
         return { data, error };
     };
 
-    // Sign out
+    // Sign out — single clean function
     const signOut = async () => {
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
+        try {
+            dataStore.clear();
+            localStorage.removeItem('supabase-auth-token');
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                console.error('signOut error:', error);
+                throw error;
+            }
+            // State is cleared by the onAuthStateChange listener above
+        } catch (err) {
+            // Force-clear state even if Supabase call fails
+            setUser(null);
+            setProfile(null);
+            dataStore.clear();
+            throw err;
+        }
     };
 
     const value = {
         user,
         profile,
         loading,
-        error,
+        isAuthenticated: !!user,
         // Role checks
         isAdmin,
         isSupervisor,
