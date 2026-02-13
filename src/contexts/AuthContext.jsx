@@ -63,18 +63,31 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
-        // 1. Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (!mounted) return;
-            if (session?.user) {
-                setUser(session.user);
-                fetchProfile(session.user.id);
-                import('../utils/dataService').then(({ dataService }) => {
-                    dataService.fetchAll(session.user.id);
-                });
+        // Timeout fallback — never hang more than 3 seconds
+        const timeout = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn('Auth check timed out — showing login');
+                setLoading(false);
             }
-            setLoading(false);
-        });
+        }, 3000);
+
+        // 1. Get initial session
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                if (!mounted) return;
+                if (session?.user) {
+                    setUser(session.user);
+                    fetchProfile(session.user.id);
+                    import('../utils/dataService').then(({ dataService }) => {
+                        dataService.fetchAll(session.user.id);
+                    });
+                }
+                setLoading(false);
+            })
+            .catch((err) => {
+                console.error('getSession failed:', err);
+                if (mounted) setLoading(false);
+            });
 
         // 2. Listen for changes (login, logout, token refresh)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -82,26 +95,33 @@ export const AuthProvider = ({ children }) => {
                 if (!mounted) return;
                 console.log('Auth event:', event);
 
-                if (event === 'SIGNED_IN' && session?.user) {
+                if (event === 'INITIAL_SESSION') {
+                    // This fires once — if no session, stop loading
+                    if (!session) {
+                        setUser(null);
+                        setLoading(false);
+                    }
+                } else if (event === 'SIGNED_IN' && session?.user) {
                     setUser(session.user);
                     await fetchProfile(session.user.id);
                     import('../utils/dataService').then(({ dataService }) => {
                         dataService.fetchAll(session.user.id);
                     });
+                    setLoading(false);
                 } else if (event === 'SIGNED_OUT') {
                     setUser(null);
                     setProfile(null);
                     dataStore.clear();
+                    setLoading(false);
                 } else if (event === 'TOKEN_REFRESHED' && session?.user) {
                     setUser(session.user);
                 }
-
-                setLoading(false);
             }
         );
 
         return () => {
             mounted = false;
+            clearTimeout(timeout);
             subscription.unsubscribe();
         };
     }, [fetchProfile]);
